@@ -1,58 +1,81 @@
 package com.thuo_ng.swift_chat_android.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary              = Blue40,
+    onPrimary            = Neutral100,
+    primaryContainer     = Blue50,
+    onPrimaryContainer   = Blue10,
+    inversePrimary       = Blue80,
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    secondary            = Green30,
+    onSecondary          = Neutral100,
+    secondaryContainer   = Green90,
+    onSecondaryContainer = Green40,
+
+    tertiary             = Amber40,
+    onTertiary           = Neutral100,
+    tertiaryContainer    = Amber50,
+    onTertiaryContainer  = Amber20,
+
+    error                = Red40,
+    onError              = Neutral100,
+    errorContainer       = Red90,
+    onErrorContainer     = Red10,
+
+    background           = Neutral99,
+    onBackground         = Neutral10,
+
+    surface              = Neutral99,
+    onSurface            = Neutral10,
+    surfaceVariant       = NeutralVariant90,
+    onSurfaceVariant     = NeutralVariant30,
+    surfaceTint          = Blue40,
+
+    surfaceBright              = Neutral99,
+    surfaceDim                 = Neutral87,
+    surfaceContainer           = Neutral94,
+    surfaceContainerHigh       = Neutral92,
+    surfaceContainerHighest    = Neutral90,
+    surfaceContainerLow        = Neutral96,
+    surfaceContainerLowest     = Neutral100,
+
+    inverseSurface       = Neutral20,
+    inverseOnSurface     = NeutralVariant95,
+
+    outline              = NeutralVariant50,
+    outlineVariant       = NeutralVariant80,
+
+    scrim                = Neutral0,
 )
 
+// Theme Composable
+
 @Composable
-fun SwiftchatandroidTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+fun SwiftChatTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(
+        LocalChatColor provides LightChatColor,
+    ) {
+        MaterialTheme(
+            colorScheme = LightColorScheme,
+            typography  = SwiftChatTypography,
+            shapes      = SwiftChatShapes,
+            content     = content,
+        )
     }
+}
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+// Convenience Accessor
+
+object SwiftChatThemeTokens {
+    /** Chat-specific color tokens not covered by MaterialTheme.colorScheme. */
+    val chatColors: ChatColor
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalChatColor.current
 }
