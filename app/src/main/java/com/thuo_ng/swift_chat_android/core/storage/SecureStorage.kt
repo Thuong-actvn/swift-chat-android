@@ -8,6 +8,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import androidx.core.content.edit
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 @Singleton
 class SecureStorage @Inject constructor(
@@ -32,12 +35,16 @@ class SecureStorage @Inject constructor(
         private const val KEY_REFRESH_TOKEN = "key_refresh_token"
     }
 
+    private val _tokenFlow = MutableStateFlow(sharedPreferences.getString(KEY_ACCESS_TOKEN, null))
+    val tokenFlow : StateFlow<String?> = _tokenFlow.asStateFlow()
+    
     @Synchronized
     fun saveTokens(accessToken: String, refreshToken: String) {
         sharedPreferences.edit {
             putString(KEY_ACCESS_TOKEN, accessToken)
                 .putString(KEY_REFRESH_TOKEN, refreshToken)
         }
+        _tokenFlow.value = accessToken
     }
 
     @Synchronized
@@ -53,5 +60,6 @@ class SecureStorage @Inject constructor(
     @Synchronized
     fun clearAll() {
         sharedPreferences.edit { clear() }
+        _tokenFlow.value = null
     }
 }
