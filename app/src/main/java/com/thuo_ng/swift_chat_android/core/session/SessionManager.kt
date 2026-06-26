@@ -1,4 +1,4 @@
-package com.thuo_ng.swift_chat_android.core.network
+package com.thuo_ng.swift_chat_android.core.session
 
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,9 +23,4 @@ class SessionManager @Inject constructor() {
     fun logout() {
         _sessionEvent.tryEmit(SessionEvent.LoggedOut)
     }
-}
-
-sealed class SessionEvent {
-    object Expired : SessionEvent()
-    object LoggedOut : SessionEvent()
 }

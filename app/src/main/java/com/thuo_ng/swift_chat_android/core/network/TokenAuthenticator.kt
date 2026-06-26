@@ -1,5 +1,6 @@
 package com.thuo_ng.swift_chat_android.core.network
 
+import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.RefreshTokenRequest
@@ -23,12 +24,7 @@ class TokenAuthenticator @Inject constructor(
     private val mutex = Mutex()
 
     override fun authenticate(route: Route?, response: Response): Request? {
-        if (response.request.header("Authorization") != null && response.priorResponse != null) {
-            val priorAuth = response.priorResponse?.request?.header("Authorization")
-            if (priorAuth != null && priorAuth != response.request.header("Authorization")) {
-                return null
-            }
-        }
+        if (response.priorResponse?.code == 401) return null
 
         return runBlocking { // Tạo Blocking Coroutine -> Tạo scope để gọi suspend function (refreshToken)->giữ thread hiện tại đứng im, chờ hết block chạy hết
             mutex.withLock {
@@ -51,20 +47,29 @@ class TokenAuthenticator @Inject constructor(
                 try {
                     val apiResponse = authApiProvider.get().refreshToken(RefreshTokenRequest(refreshToken))
                     if (apiResponse.isSuccessful) {
-                        apiResponse.body()?.let { tokenResponse ->
+                        val tokenResponse = apiResponse.body()
+                        if (tokenResponse != null) {
                             secureStorage.saveTokens(tokenResponse.accessToken, tokenResponse.refreshToken)
                             return@runBlocking response.request.newBuilder()
                                 .header("Authorization", "Bearer ${tokenResponse.accessToken}")
                                 .build()
                         }
-                    }
-                    if (apiResponse.code() == 401) {
+                        // Body null dù 2xx — không dùng được token, expire để tránh loop
                         secureStorage.clearAll()
                         sessionManager.expireSession()
                         return@runBlocking null
                     }
+
+                    // 401/403: token thực sự hết hạn hoặc bị revoke → expire session
+                    // 5xx/khác: lỗi phía server tạm thời
+                    if (apiResponse.code() == 401 || apiResponse.code() == 403) {
+                        secureStorage.clearAll()
+                        sessionManager.expireSession()
+                    }
+                    return@runBlocking null
+
                 } catch (e: Exception) {
-                    // Handle network exception during refresh
+                    // Lỗi mạng khi refresh → không expire, để user retry sau
                     return@runBlocking null
                 }
                 null

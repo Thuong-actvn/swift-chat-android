@@ -1,7 +1,7 @@
 package com.thuo_ng.swift_chat_android.data.repository
 
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
-import com.thuo_ng.swift_chat_android.core.network.SessionManager
+import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
