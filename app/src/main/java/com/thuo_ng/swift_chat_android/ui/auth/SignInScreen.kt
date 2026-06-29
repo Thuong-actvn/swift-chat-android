@@ -50,7 +50,7 @@ fun SignInScreen(
                 is AuthEffect.NavigateToMain -> onEffect(effect)
                 is AuthEffect.NavigateToSignIn -> { /* không cần xử lý ở đây */ }
                 is AuthEffect.ShowError -> {
-                    Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, effect.message, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -59,7 +59,8 @@ fun SignInScreen(
     SignInContent(
         uiState = uiState,
         onIntent = viewModel::handleIntent,
-        onNavigateToSignUp = onNavigateToSignUp
+        onNavigateToSignUp = onNavigateToSignUp,
+        onGoogleSignInClick = { viewModel.handleIntent(AuthIntent.SubmitGoogleSignIn(context)) }
     )
 }
 
@@ -72,7 +73,8 @@ fun SignInScreen(
 fun SignInContent(
     uiState: AuthUiState,
     onIntent: (AuthIntent) -> Unit,
-    onNavigateToSignUp: () -> Unit
+    onNavigateToSignUp: () -> Unit,
+    onGoogleSignInClick: () -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -196,7 +198,7 @@ fun SignInContent(
         
         SwiftOutlinedButton(
             text = "Log in with Google",
-            onClick = { /* TODO */ },
+            onClick = { onGoogleSignInClick() },
             icon = {
                 Icon(
                     painter = painterResource(id = R.drawable.icon_google),
@@ -238,7 +240,8 @@ fun SignInScreenPreview() {
         SignInContent(
             uiState = AuthUiState(),
             onIntent = {},
-            onNavigateToSignUp = {}
+            onNavigateToSignUp = {},
+            onGoogleSignInClick = {}
         )
     }
 }

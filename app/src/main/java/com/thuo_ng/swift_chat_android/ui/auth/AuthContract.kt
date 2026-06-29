@@ -1,5 +1,7 @@
 package com.thuo_ng.swift_chat_android.ui.auth
 
+import android.content.Context
+
 // UI State
 
 data class AuthUiState(
@@ -54,6 +56,8 @@ sealed class AuthIntent {
     object ValidatePassword : AuthIntent()
     object ValidateConfirmPassword : AuthIntent()
     object ValidateUsername : AuthIntent()
+
+    data class SubmitGoogleSignIn(val activityContext : Context) : AuthIntent()
 }
 
 // Effect

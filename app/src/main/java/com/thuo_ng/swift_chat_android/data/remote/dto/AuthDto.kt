@@ -35,3 +35,6 @@ data class AuthResponse(
     val refreshToken: String,
     val user: UserBrief
 )
+data class GoogleLoginRequest(
+    val idToken: String
+)

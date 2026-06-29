@@ -1,8 +1,11 @@
 package com.thuo_ng.swift_chat_android.ui.auth
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.thuo_ng.swift_chat_android.core.auth.GoogleSignInHelper
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
+import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignupRequest
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
@@ -25,6 +28,7 @@ import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateUsername
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val googleSignInHelper: GoogleSignInHelper,
     private val validateEmail: ValidateEmailUseCase,
     private val validatePassword: ValidatePasswordUseCase,
     private val validateConfirmPassword: ValidateConfirmPasswordUseCase,
@@ -87,6 +91,7 @@ class AuthViewModel @Inject constructor(
             // Submit
             is AuthIntent.SubmitSignIn -> signIn()
             is AuthIntent.SubmitSignUp -> signUp()
+            is AuthIntent.SubmitGoogleSignIn -> googleSignIn(intent.activityContext)
         }
     }
 
@@ -154,6 +159,31 @@ class AuthViewModel @Inject constructor(
                     _effect.send(AuthEffect.ShowError(result.message))
                 }
             }
+        }
+    }
+
+    //Google Sign In
+    private fun googleSignIn(activityContext : Context) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+
+            googleSignInHelper.getIdToken(activityContext)
+                .onSuccess { idToken ->
+                    when (val result = authRepository.signInWithGoogle(GoogleLoginRequest(idToken))) {
+                        is NetworkResult.Success -> {
+                            _uiState.update { it.copy(isLoading = false) }
+                            _effect.send(AuthEffect.NavigateToMain)
+                        }
+                        is NetworkResult.Error -> {
+                            _uiState.update { it.copy(isLoading = false) }
+                            _effect.send(AuthEffect.ShowError(result.message))
+                        }
+                    }
+                }
+                .onFailure { exception ->
+                    _uiState.update { it.copy(isLoading = false) }
+                    _effect.send(AuthEffect.ShowError("Google Sign-In failed: ${exception.message}"))
+                }
         }
     }
 }

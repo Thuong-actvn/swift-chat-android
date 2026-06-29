@@ -1,6 +1,7 @@
 package com.thuo_ng.swift_chat_android.data.remote.api
 
 import com.thuo_ng.swift_chat_android.data.remote.dto.AuthResponse
+import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.RefreshTokenRequest
@@ -30,4 +31,9 @@ interface AuthApi {
     suspend fun logout(
         @Body request: LogoutRequest
     ): Response<Unit>
+
+    @POST("api/v1/auth/google")
+    suspend fun googleLogin(
+        @Body request: GoogleLoginRequest
+    ): Response<AuthResponse>
 }

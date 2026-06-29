@@ -20,13 +20,25 @@ suspend fun <T> safeApiCall(apiCall: suspend () -> Response<T>): NetworkResult<T
                 NetworkResult.Error(response.code(), "Response body is null")
             }
         } else {
-            NetworkResult.Error(response.code(), response.message())
+            val errorMsg = parseErrorBody(response.errorBody()?.string(), response.message())
+            NetworkResult.Error(response.code(), errorMsg)
         }
     } catch (e: HttpException) {
-        NetworkResult.Error(e.code(), e.message() ?: "HTTP Exception")
+        val errorMsg = parseErrorBody(e.response()?.errorBody()?.string(), e.message())
+        NetworkResult.Error(e.code(), errorMsg)
     } catch (e: IOException) {
         NetworkResult.Error(null, "Network Error: ${e.message}")
     } catch (e: Exception) {
         NetworkResult.Error(null, "Unknown Error: ${e.message}")
+    }
+}
+
+private fun parseErrorBody(errorBodyString: String?, defaultMessage: String): String {
+    if (errorBodyString.isNullOrEmpty()) return defaultMessage
+    return try {
+        val jsonObject = org.json.JSONObject(errorBodyString)
+        jsonObject.optString("message", jsonObject.optString("error", defaultMessage))
+    } catch (e: Exception) {
+        defaultMessage
     }
 }
