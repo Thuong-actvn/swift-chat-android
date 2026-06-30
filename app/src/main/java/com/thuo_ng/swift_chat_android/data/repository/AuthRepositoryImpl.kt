@@ -5,11 +5,12 @@ import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
-import com.thuo_ng.swift_chat_android.data.remote.dto.AuthResponse
 import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
-import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
+import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignupRequest
+import com.thuo_ng.swift_chat_android.data.remote.dto.toAuthUser
+import com.thuo_ng.swift_chat_android.domain.model.AuthUser
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,39 +23,48 @@ class AuthRepositoryImpl @Inject constructor(
     private val sessionManager: SessionManager
 ) : AuthRepository {
 
-    override val isLoggedInFlow: Flow<Boolean> = secureStorage.tokenFlow.map {it != null}
+    override val isLoggedInFlow: Flow<Boolean> = secureStorage.tokenFlow.map { it != null }
 
-    override suspend fun signIn(request: SignInRequest): NetworkResult<AuthResponse> {
-        val result = safeApiCall { authApi.signIn(request) }
-        if (result is NetworkResult.Success) {
-            secureStorage.saveTokens(
-                accessToken = result.data.accessToken,
-                refreshToken = result.data.refreshToken
-            )
+    override suspend fun signIn(username: String, password: String): NetworkResult<AuthUser> {
+        val result = safeApiCall { authApi.signIn(SignInRequest(username, password)) }
+        return when (result) {
+            is NetworkResult.Success -> {
+                secureStorage.saveTokens(
+                    accessToken = result.data.accessToken,
+                    refreshToken = result.data.refreshToken
+                )
+                NetworkResult.Success(result.data.toAuthUser())
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
-        return result
     }
 
-    override suspend fun signup(request: SignupRequest): NetworkResult<AuthResponse> {
-        val result = safeApiCall { authApi.signup(request) }
-        if (result is NetworkResult.Success) {
-            secureStorage.saveTokens(
-                accessToken = result.data.accessToken,
-                refreshToken = result.data.refreshToken
-            )
+    override suspend fun signup(username: String, email: String, password: String): NetworkResult<AuthUser> {
+        val result = safeApiCall { authApi.signup(SignupRequest(username, email, password)) }
+        return when (result) {
+            is NetworkResult.Success -> {
+                secureStorage.saveTokens(
+                    accessToken = result.data.accessToken,
+                    refreshToken = result.data.refreshToken
+                )
+                NetworkResult.Success(result.data.toAuthUser())
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
-        return result
     }
 
-    override suspend fun signInWithGoogle(request: GoogleLoginRequest): NetworkResult<AuthResponse> {
-        val result = safeApiCall { authApi.googleLogin(request) }
-        if (result is NetworkResult.Success) {
-            secureStorage.saveTokens(
-                accessToken = result.data.accessToken,
-                refreshToken = result.data.refreshToken
-            )
+    override suspend fun signInWithGoogle(idToken: String): NetworkResult<AuthUser> {
+        val result = safeApiCall { authApi.googleLogin(GoogleLoginRequest(idToken)) }
+        return when (result) {
+            is NetworkResult.Success -> {
+                secureStorage.saveTokens(
+                    accessToken = result.data.accessToken,
+                    refreshToken = result.data.refreshToken
+                )
+                NetworkResult.Success(result.data.toAuthUser())
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
-        return result
     }
 
     override suspend fun logout() {

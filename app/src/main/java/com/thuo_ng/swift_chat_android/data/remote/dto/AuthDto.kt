@@ -1,23 +1,10 @@
 package com.thuo_ng.swift_chat_android.data.remote.dto
 
-data class RefreshTokenRequest(
-    val refreshToken: String
-)
+import com.google.gson.annotations.SerializedName
 
-data class RefreshTokenResponse(
-    val accessToken: String,
-    val refreshToken: String,
-    val user: UserBrief
-)
+import com.thuo_ng.swift_chat_android.domain.model.AuthUser
 
-data class UserBrief(
-    val id: String,
-    val email: String
-)
-
-data class LogoutRequest(
-    val refreshToken: String
-)
+// ── Request bodies ────────────────────────────────────────────────────────────
 
 data class SignInRequest(
     val username: String,
@@ -25,16 +12,43 @@ data class SignInRequest(
 )
 
 data class SignupRequest(
+    val username: String? = null,
     val email: String,
-    val password: String,
-    val username: String? = null
+    val password: String
 )
 
-data class AuthResponse(
-    val accessToken: String,
-    val refreshToken: String,
-    val user: UserBrief
-)
 data class GoogleLoginRequest(
     val idToken: String
 )
+
+data class RefreshTokenRequest(
+    val refreshToken: String
+)
+
+data class LogoutRequest(
+    val refreshToken: String
+)
+
+// ── Response bodies ───────────────────────────────────────────────────────────
+
+data class AccountBriefDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("email") val email: String
+)
+
+data class AuthResponseDto(
+    @SerializedName("accessToken") val accessToken: String,
+    @SerializedName("refreshToken") val refreshToken: String,
+    @SerializedName("account") val account: AccountBriefDto
+)
+
+data class RefreshTokenResponseDto(
+    @SerializedName("accessToken") val accessToken: String,
+    @SerializedName("refreshToken") val refreshToken: String,
+    @SerializedName("account") val account: AccountBriefDto
+)
+
+// ── Mappers ───────────────────────────────────────────────────────────────────
+
+fun AuthResponseDto.toAuthUser(): AuthUser =
+    AuthUser(id = account.id, email = account.email)

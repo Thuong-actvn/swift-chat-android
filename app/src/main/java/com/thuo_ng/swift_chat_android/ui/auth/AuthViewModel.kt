@@ -5,10 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.auth.GoogleSignInHelper
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
-import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
-import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
-import com.thuo_ng.swift_chat_android.data.remote.dto.SignupRequest
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
+import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateEmailUseCase
+import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidatePasswordUseCase
+import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateConfirmPasswordUseCase
+import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateUsernameUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -19,11 +20,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateEmailUseCase
-import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidatePasswordUseCase
-import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateConfirmPasswordUseCase
-import com.thuo_ng.swift_chat_android.domain.usecase.validation.ValidateUsernameUseCase
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -111,7 +107,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            when (val result = authRepository.signIn(SignInRequest(state.username, state.password))) {
+            when (val result = authRepository.signIn(state.username, state.password)) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(isLoading = false) }
                     _effect.send(AuthEffect.NavigateToMain)
@@ -149,7 +145,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
-            when (val result = authRepository.signup(SignupRequest(state.email, state.password, state.username))) {
+            when (val result = authRepository.signup( state.username, state.email, state.password)) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(isLoading = false) }
                     _effect.send(AuthEffect.NavigateToMain)
@@ -162,14 +158,14 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    //Google Sign In
-    private fun googleSignIn(activityContext : Context) {
+    // Google Sign In
+    private fun googleSignIn(activityContext: Context) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
 
             googleSignInHelper.getIdToken(activityContext)
                 .onSuccess { idToken ->
-                    when (val result = authRepository.signInWithGoogle(GoogleLoginRequest(idToken))) {
+                    when (val result = authRepository.signInWithGoogle(idToken)) {
                         is NetworkResult.Success -> {
                             _uiState.update { it.copy(isLoading = false) }
                             _effect.send(AuthEffect.NavigateToMain)
