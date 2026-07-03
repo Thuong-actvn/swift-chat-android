@@ -1,10 +1,16 @@
 package com.thuo_ng.swift_chat_android.ui.main
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Person
@@ -12,14 +18,21 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -32,18 +45,20 @@ import com.thuo_ng.swift_chat_android.ui.navigation.Calls
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
+import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 
 private data class TabItem(
     val label: String,
-    val icon: ImageVector,
+    val unselectedIcon: ImageVector,
+    val selectedIcon: ImageVector,
     val route: Any // @Serializable route object
 )
 
 private val tabs = listOf(
-    TabItem("Chats", Icons.AutoMirrored.Outlined.Chat, Conversations),
-    TabItem("Calls", Icons.Outlined.Call, Calls),
-    TabItem("Friends", Icons.Outlined.Group, Friends),
-    TabItem("Profile", Icons.Outlined.Person, Profile)
+    TabItem("Chats", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, Conversations),
+    TabItem("Calls", Icons.Outlined.Call, Icons.Filled.Call, Calls),
+    TabItem("Friends", Icons.Outlined.Group, Icons.Filled.Group, Friends),
+    TabItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Profile)
 )
 
 @Composable
@@ -54,31 +69,60 @@ fun MainScreen(onLogout: () -> Unit) {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                tabs.forEach { tab ->
-                    val selected = currentDestination?.hierarchy?.any {
-                        it.hasRoute(tab.route::class)
-                    } == true
-
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            mainNavController.navigate(tab.route) {
-                                popUpTo(mainNavController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.label
-                            )
-                        },
-                        label = { Text(tab.label) }
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .dropShadow(
+                        shape = MaterialTheme.shapes.large,
+                        shadow = Shadow(
+                            radius = 16.dp,
+                            spread = 0.dp,
+                            color = Color.Black.copy(alpha = 0.08f),
+                            offset = DpOffset(x = 0.dp, (-8).dp)
+                        )
                     )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp)
+                ) {
+                    tabs.forEach { tab ->
+                        val selected = currentDestination?.hierarchy?.any {
+                            it.hasRoute(tab.route::class)
+                        } == true
+
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                mainNavController.navigate(tab.route) {
+                                    popUpTo(mainNavController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                    contentDescription = tab.label
+                                )
+                            },
+                            label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.6f
+                                ),
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                    alpha = 0.6f
+                                ),
+                                indicatorColor = Color.Transparent
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -121,5 +165,13 @@ private fun PlaceholderTab(title: String, subtitle: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+    }
+}
+
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+fun MainScreenPreview() {
+    SwiftChatTheme {
+        MainScreen(onLogout = {})
     }
 }
