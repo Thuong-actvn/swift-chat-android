@@ -13,9 +13,12 @@ composeBom = "2026.05.01"
 
 ksp = "2.3.9"
 hilt = "2.59.2"
+pagingRuntimeKtx = "3.5.0"
+pagingCompose = "3.5.0"
 retrofit = "3.0.0"
 okhttp = "5.4.0"
 datastore = "1.2.1"
+roomVersion = "2.8.4"
 securityCrypto = "1.1.0"
 coroutines = "1.11.0"
 kotlinxSerialization = "1.8.1"
@@ -29,6 +32,11 @@ coreSplashscreen = "1.0.1"
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "pagingCompose" }
+androidx-paging-runtime-ktx = { module = "androidx.paging:paging-runtime-ktx", version.ref = "pagingRuntimeKtx" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomVersion" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomVersion" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomVersion" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
