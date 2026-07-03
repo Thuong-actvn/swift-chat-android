@@ -23,6 +23,7 @@ object DatabaseModule {
         AppDatabase::class.java,
         "swift_chat_db"
     )
+        .fallbackToDestructiveMigration(true)
         .build()
 
     @Provides

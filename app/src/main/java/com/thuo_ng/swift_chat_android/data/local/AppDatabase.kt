@@ -6,7 +6,7 @@ import com.thuo_ng.swift_chat_android.data.local.dao.UserDao
 import com.thuo_ng.swift_chat_android.data.local.entity.UserEntity
 
 
-@Database(entities = [UserEntity::class], exportSchema = false, version = 1)
+@Database(entities = [UserEntity::class], exportSchema = false, version = 2)
 abstract class AppDatabase: RoomDatabase() {
     abstract fun userDao(): UserDao
 }
