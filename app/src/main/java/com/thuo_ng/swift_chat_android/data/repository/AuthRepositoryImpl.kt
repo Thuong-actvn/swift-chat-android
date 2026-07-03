@@ -33,6 +33,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = result.data.accessToken,
                     refreshToken = result.data.refreshToken
                 )
+                secureStorage.saveUserId(result.data.account.id)
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
@@ -47,6 +48,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = result.data.accessToken,
                     refreshToken = result.data.refreshToken
                 )
+                secureStorage.saveUserId(result.data.account.id)
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
@@ -61,6 +63,7 @@ class AuthRepositoryImpl @Inject constructor(
                     accessToken = result.data.accessToken,
                     refreshToken = result.data.refreshToken
                 )
+                secureStorage.saveUserId(result.data.account.id)
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)

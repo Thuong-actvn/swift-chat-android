@@ -33,10 +33,14 @@ class SecureStorage @Inject constructor(
     companion object {
         private const val KEY_ACCESS_TOKEN = "key_access_token"
         private const val KEY_REFRESH_TOKEN = "key_refresh_token"
+        private const val KEY_USER_ID = "key_user_id"
     }
 
     private val _tokenFlow = MutableStateFlow(sharedPreferences.getString(KEY_ACCESS_TOKEN, null))
     val tokenFlow : StateFlow<String?> = _tokenFlow.asStateFlow()
+
+    private val _userIdFlow = MutableStateFlow(sharedPreferences.getString(KEY_USER_ID, null))
+    val userIdFlow: StateFlow<String?> = _userIdFlow.asStateFlow()
     
     @Synchronized
     fun saveTokens(accessToken: String, refreshToken: String) {
@@ -48,6 +52,13 @@ class SecureStorage @Inject constructor(
     }
 
     @Synchronized
+    fun saveUserId(userId: String) {
+        sharedPreferences.edit {
+            putString(KEY_USER_ID, userId)
+        }
+        _userIdFlow.value = userId
+    }
+    @Synchronized
     fun getAccessToken(): String? {
         return sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
     }
@@ -58,8 +69,14 @@ class SecureStorage @Inject constructor(
     }
 
     @Synchronized
+    fun getUserId(): String? {
+        return sharedPreferences.getString(KEY_USER_ID, null)
+    }
+
+    @Synchronized
     fun clearAll() {
         sharedPreferences.edit { clear() }
         _tokenFlow.value = null
+        _userIdFlow.value = null
     }
 }
