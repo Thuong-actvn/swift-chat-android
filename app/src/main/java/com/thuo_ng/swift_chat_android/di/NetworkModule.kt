@@ -4,6 +4,7 @@ import com.thuo_ng.swift_chat_android.BuildConfig
 import com.thuo_ng.swift_chat_android.core.network.AuthInterceptor
 import com.thuo_ng.swift_chat_android.core.network.TokenAuthenticator
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
+import com.thuo_ng.swift_chat_android.data.remote.api.UserApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -93,5 +94,13 @@ object NetworkModule {
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideUserApi(
+        @Named("MainRetrofit") retrofit: Retrofit
+    ): UserApi {
+        return retrofit.create(UserApi::class.java)
     }
 }
