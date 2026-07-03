@@ -22,7 +22,7 @@ interface AuthApi {
         @Body request: SignupRequest
     ): Response<AuthResponseDto>
 
-    @POST("api/v1/auth/refresh")
+    @POST("api/v1/auth/refresh-token")
     suspend fun refreshToken(
         @Body request: RefreshTokenRequest
     ): Response<RefreshTokenResponseDto>
