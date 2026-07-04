@@ -5,6 +5,7 @@ import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
+import com.thuo_ng.swift_chat_android.data.remote.api.UserApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
@@ -19,6 +20,7 @@ import javax.inject.Named
 
 class AuthRepositoryImpl @Inject constructor(
     @param:Named("AuthApi") private val authApi: AuthApi,
+    private val userApi: UserApi,
     private val secureStorage: SecureStorage,
     private val sessionManager: SessionManager
 ) : AuthRepository {
@@ -73,7 +75,9 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun logout() {
         val refreshToken = secureStorage.getRefreshToken()
         if (!refreshToken.isNullOrEmpty()) {
-            safeApiCall { authApi.logout(LogoutRequest(refreshToken)) }
+            safeApiCall { 
+                userApi.logout(LogoutRequest(refreshToken))
+            }
         }
         secureStorage.clearAll()
         sessionManager.logout()
