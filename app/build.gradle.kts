@@ -96,6 +96,9 @@ dependencies {
     // Lifecycle
     implementation(libs.lifecycle.viewmodel)
 
+    // Image loading
+    implementation(libs.coil.compose)
+
     // Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
