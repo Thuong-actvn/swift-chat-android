@@ -11,14 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.thuo_ng.swift_chat_android.R
 
 // ==========================================
 // 1. TEXT FIELDS (Atomic Components)
@@ -33,6 +30,8 @@ fun SwiftTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    singleLine: Boolean? = null,
+    maxLines: Int? = null,
     placeholder: String? = null,
     leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
@@ -70,7 +69,8 @@ fun SwiftTextField(
             errorBorderColor = MaterialTheme.colorScheme.error,
             errorContainerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
         ),
-        singleLine = true
+        singleLine = singleLine ?: true,
+        maxLines = maxLines ?: 1
     )
 }
 
@@ -154,6 +154,7 @@ fun SwiftOutlinedButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues? = null,
     icon: @Composable (() -> Unit)? = null
 ) {
     OutlinedButton(
@@ -161,6 +162,7 @@ fun SwiftOutlinedButton(
         modifier = modifier
             .fillMaxWidth()
             .height(50.dp),
+        contentPadding = contentPadding ?: PaddingValues(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
     ) {
