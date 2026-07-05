@@ -2,6 +2,7 @@ package com.thuo_ng.swift_chat_android.ui.main
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,20 +32,24 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.thuo_ng.swift_chat_android.ui.navigation.Calls
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
+import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
+import com.thuo_ng.swift_chat_android.ui.profile.ProfileScreen
 import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 
 private data class TabItem(
@@ -62,7 +67,10 @@ private val tabs = listOf(
 )
 
 @Composable
-fun MainScreen(onLogout: () -> Unit) {
+fun MainScreen(
+    rootNavController: NavController,
+    onLogout: () -> Unit
+) {
     val mainNavController = rememberNavController()
     val navBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -130,7 +138,9 @@ fun MainScreen(onLogout: () -> Unit) {
         NavHost(
             navController = mainNavController,
             startDestination = Conversations,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             composable<Conversations> {
                 PlaceholderTab(title = "Conversations", subtitle = "Chưa có cuộc trò chuyện nào!")
@@ -142,7 +152,10 @@ fun MainScreen(onLogout: () -> Unit) {
                 PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
             }
             composable<Profile> {
-                PlaceholderTab(title = "Profile", subtitle = "Thông tin cá nhân!")
+                ProfileScreen(
+                    onNavigateToEditProfile = { rootNavController.navigate(EditProfile) },
+                    onLogout = onLogout
+                )
             }
         }
     }
@@ -163,7 +176,7 @@ private fun PlaceholderTab(title: String, subtitle: String) {
             fontWeight = FontWeight.Medium,
             fontSize = 16.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -172,6 +185,9 @@ private fun PlaceholderTab(title: String, subtitle: String) {
 @Composable
 fun MainScreenPreview() {
     SwiftChatTheme {
-        MainScreen(onLogout = {})
+        MainScreen(
+            rootNavController = rememberNavController(),
+            onLogout = {}
+        )
     }
 }

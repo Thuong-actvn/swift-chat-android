@@ -16,3 +16,6 @@ import kotlinx.serialization.Serializable
 @Serializable object Calls
 @Serializable object Friends
 @Serializable object Profile
+
+// ── Root routes (Full screen) ────────────────────────────
+@Serializable object EditProfile
