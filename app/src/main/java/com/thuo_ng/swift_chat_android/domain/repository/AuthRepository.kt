@@ -11,4 +11,5 @@ interface AuthRepository {
     suspend fun logout()
     fun isUserLoggedIn(): Boolean
     val isLoggedInFlow: Flow<Boolean>
+    suspend fun refreshToken(): NetworkResult<Unit>
 }

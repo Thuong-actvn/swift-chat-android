@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.session.SessionEvent
 import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
+import com.thuo_ng.swift_chat_android.core.socket.SocketManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +20,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val socketManager: SocketManager
 ) : ViewModel() {
 
     val authState: StateFlow<AppAuthState> = authRepository.isLoggedInFlow
@@ -41,6 +43,16 @@ class AppViewModel @Inject constructor(
                     SessionEvent.Expired ->
                         _effect.send(AppEffect.ShowMessage("Session expired. Please log in again."))
                     SessionEvent.LoggedOut -> Unit
+                }
+            }
+        }
+        
+        viewModelScope.launch {
+            authRepository.isLoggedInFlow.collect { isLoggedIn ->
+                if (isLoggedIn) {
+                    socketManager.connect()
+                } else {
+                    socketManager.disconnect()
                 }
             }
         }

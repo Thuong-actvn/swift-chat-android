@@ -1,6 +1,7 @@
 package com.thuo_ng.swift_chat_android.data.repository
 
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
+import com.thuo_ng.swift_chat_android.core.network.TokenRefreshManager
 import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
@@ -22,7 +23,8 @@ class AuthRepositoryImpl @Inject constructor(
     @param:Named("AuthApi") private val authApi: AuthApi,
     private val userApi: UserApi,
     private val secureStorage: SecureStorage,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val tokenRefreshManager: TokenRefreshManager
 ) : AuthRepository {
 
     override val isLoggedInFlow: Flow<Boolean> = secureStorage.tokenFlow.map { it != null }
@@ -85,5 +87,13 @@ class AuthRepositoryImpl @Inject constructor(
 
     override fun isUserLoggedIn(): Boolean {
         return !secureStorage.getAccessToken().isNullOrEmpty()
+    }
+
+    override suspend fun refreshToken(): NetworkResult<Unit> {
+        return if (tokenRefreshManager.refreshAccessToken()) {
+            NetworkResult.Success(Unit)
+        } else {
+            NetworkResult.Error(401, "Unable to refresh token")
+        }
     }
 }
