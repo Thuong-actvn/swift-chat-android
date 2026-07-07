@@ -107,6 +107,14 @@ dependencies {
     // Paging 3
     implementation(libs.androidx.paging.runtime.ktx)
     implementation(libs.androidx.paging.compose)
+    
+    // Socket.io
+    implementation(libs.socketio.client) {
+        exclude(group = "org.json", module = "json")
+    }
+    
+    // Lifecycle Process (for background/foreground detection)
+    implementation(libs.lifecycle.process)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

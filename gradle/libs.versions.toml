@@ -29,6 +29,7 @@ lifecycle = "2.10.0"
 kotlinMetadata = "2.4.0"
 coreSplashscreen = "1.0.1"
 coil = "2.7.0"
+socketio = "2.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -56,6 +57,8 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+socketio-client = { group = "io.socket", name = "socket.io-client", version.ref = "socketio" }
+lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycle" }
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
