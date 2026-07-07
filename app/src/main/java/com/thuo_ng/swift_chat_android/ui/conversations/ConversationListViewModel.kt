@@ -27,12 +27,13 @@ class ConversationListViewModel @Inject constructor(
     val effect: Flow<ConversationEffect> = _effect.receiveAsFlow()
 
     init {
-        loadConversations(isRefresh = false)
+        observeConversations()
+        syncConversations(isRefresh = false)
     }
 
     fun handleIntent(intent: ConversationIntent) {
         when (intent) {
-            is ConversationIntent.Refresh -> loadConversations(isRefresh = true)
+            is ConversationIntent.Refresh -> syncConversations(isRefresh = true)
             is ConversationIntent.FilterChanged -> {
                 _uiState.update { it.copy(selectedFilter = intent.filter) }
             }
@@ -44,23 +45,37 @@ class ConversationListViewModel @Inject constructor(
         }
     }
 
-    private fun loadConversations(isRefresh: Boolean) {
+    private fun observeConversations() {
+        viewModelScope.launch {
+            conversationRepository.observeConversations().collect { conversations ->
+                _uiState.update {
+                    it.copy(
+                        conversations = conversations,
+                        isLoading = if (conversations.isNotEmpty()) false else it.isLoading
+                    )
+                }
+            }
+        }
+    }
+
+    private fun syncConversations(isRefresh: Boolean) {
         if (isRefresh && (_uiState.value.isLoading || _uiState.value.isRefreshing)) return
 
         viewModelScope.launch {
+            val shouldShowInitialLoading = !isRefresh && _uiState.value.conversations.isEmpty()
+
             _uiState.update {
                 it.copy(
-                    isLoading = !isRefresh,
+                    isLoading = shouldShowInitialLoading,
                     isRefreshing = isRefresh,
                     errorMessage = null
                 )
             }
 
-            when (val result = conversationRepository.getConversations()) {
+            when (val result = conversationRepository.syncConversations()) {
                 is NetworkResult.Success -> {
                     _uiState.update {
                         it.copy(
-                            conversations = result.data.conversations,
                             nextCursor = result.data.nextCursor,
                             hasMore = result.data.hasMore,
                             isLoading = false,

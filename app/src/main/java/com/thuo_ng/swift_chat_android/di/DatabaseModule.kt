@@ -29,4 +29,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideUserDao(db: AppDatabase) = db.userDao()
+
+    @Provides
+    @Singleton
+    fun provideConversationDao(db: AppDatabase) = db.conversationDao()
 }

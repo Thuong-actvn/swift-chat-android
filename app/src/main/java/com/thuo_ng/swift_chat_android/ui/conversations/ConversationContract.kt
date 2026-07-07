@@ -17,10 +17,10 @@ data class ConversationUiState(
     val hasMore: Boolean = false
 ) {
     val visibleConversations: List<Conversation>
-        get() = conversations.filter { conversation ->
-            when (selectedFilter) {
-                ConversationFilter.Chats -> conversation.type.equals("direct", ignoreCase = true)
-                ConversationFilter.Groups -> conversation.type.equals("group", ignoreCase = true)
+        get() = when (selectedFilter) {
+            ConversationFilter.Chats -> conversations
+            ConversationFilter.Groups -> conversations.filter { conversation ->
+                conversation.type.equals("group", ignoreCase = true)
             }
         }
 }
