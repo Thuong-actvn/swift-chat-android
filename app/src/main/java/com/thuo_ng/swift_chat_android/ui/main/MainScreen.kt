@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -36,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -50,6 +54,8 @@ import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
 import com.thuo_ng.swift_chat_android.ui.navigation.Notifications
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
+import com.thuo_ng.swift_chat_android.ui.notifications.NotificationScreen
+import com.thuo_ng.swift_chat_android.ui.notifications.NotificationViewModel
 import com.thuo_ng.swift_chat_android.ui.profile.ProfileScreen
 import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 
@@ -70,11 +76,14 @@ private val tabs = listOf(
 @Composable
 fun MainScreen(
     rootNavController: NavController,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
     val mainNavController = rememberNavController()
     val navBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
+    val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
+    val notificationUnreadCount = notificationState.unreadCount
 
     Scaffold(
         bottomBar = {
@@ -113,10 +122,20 @@ fun MainScreen(
                                 }
                             },
                             icon = {
-                                Icon(
-                                    imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                    contentDescription = tab.label
-                                )
+                                BadgedBox(
+                                    badge = {
+                                        if (tab.route == Notifications && notificationUnreadCount > 0) {
+                                            Badge {
+                                                Text(formatBadgeCount(notificationUnreadCount))
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                        contentDescription = tab.label
+                                    )
+                                }
                             },
                             label = { Text(tab.label) },
                             colors = NavigationBarItemDefaults.colors(
@@ -152,7 +171,7 @@ fun MainScreen(
                 PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
             }
             composable<Notifications> {
-                PlaceholderTab(title = "Notifications", subtitle = "Chưa có thông báo nào!")
+                NotificationScreen(viewModel = notificationViewModel)
             }
             composable<Profile> {
                 ProfileScreen(
@@ -162,6 +181,10 @@ fun MainScreen(
             }
         }
     }
+}
+
+private fun formatBadgeCount(count: Int): String {
+    return if (count > 99) "99+" else count.toString()
 }
 
 /**

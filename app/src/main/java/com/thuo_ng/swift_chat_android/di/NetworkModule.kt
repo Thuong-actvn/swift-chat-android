@@ -5,6 +5,7 @@ import com.thuo_ng.swift_chat_android.core.network.AuthInterceptor
 import com.thuo_ng.swift_chat_android.core.network.TokenAuthenticator
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
 import com.thuo_ng.swift_chat_android.data.remote.api.ConversationApi
+import com.thuo_ng.swift_chat_android.data.remote.api.NotificationApi
 import com.thuo_ng.swift_chat_android.data.remote.api.UserApi
 import dagger.Module
 import dagger.Provides
@@ -111,5 +112,13 @@ object NetworkModule {
         @Named("MainRetrofit") retrofit: Retrofit
     ): ConversationApi {
         return retrofit.create(ConversationApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideNotificationApi(
+        @Named("MainRetrofit") retrofit: Retrofit
+    ): NotificationApi {
+        return retrofit.create(NotificationApi::class.java)
     }
 }

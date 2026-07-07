@@ -33,4 +33,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideConversationDao(db: AppDatabase) = db.conversationDao()
+
+    @Provides
+    @Singleton
+    fun provideNotificationDao(db: AppDatabase) = db.notificationDao()
 }
