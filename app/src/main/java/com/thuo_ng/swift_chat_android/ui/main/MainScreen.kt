@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,10 +44,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.thuo_ng.swift_chat_android.ui.navigation.Calls
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
+import com.thuo_ng.swift_chat_android.ui.navigation.Notifications
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
 import com.thuo_ng.swift_chat_android.ui.profile.ProfileScreen
 import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
@@ -61,8 +61,8 @@ private data class TabItem(
 
 private val tabs = listOf(
     TabItem("Chats", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, Conversations),
-    TabItem("Calls", Icons.Outlined.Call, Icons.Filled.Call, Calls),
     TabItem("Friends", Icons.Outlined.Group, Icons.Filled.Group, Friends),
+    TabItem("Notifications", Icons.Outlined.Notifications, Icons.Filled.Notifications, Notifications),
     TabItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Profile)
 )
 
@@ -145,11 +145,11 @@ fun MainScreen(
             composable<Conversations> {
                 PlaceholderTab(title = "Conversations", subtitle = "Chưa có cuộc trò chuyện nào!")
             }
-            composable<Calls> {
-                PlaceholderTab(title = "Calls", subtitle = "Chưa có cuộc gọi nào!")
-            }
             composable<Friends> {
                 PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
+            }
+            composable<Notifications> {
+                PlaceholderTab(title = "Notifications", subtitle = "Chưa có thông báo nào!")
             }
             composable<Profile> {
                 ProfileScreen(

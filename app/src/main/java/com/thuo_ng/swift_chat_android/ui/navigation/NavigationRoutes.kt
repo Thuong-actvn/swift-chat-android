@@ -13,8 +13,8 @@ import kotlinx.serialization.Serializable
 // ── Main (tab) routes ────────────────────────────────────
 @Serializable object Conversations
 
-@Serializable object Calls
 @Serializable object Friends
+@Serializable object Notifications
 @Serializable object Profile
 
 // ── Root routes (Full screen) ────────────────────────────
