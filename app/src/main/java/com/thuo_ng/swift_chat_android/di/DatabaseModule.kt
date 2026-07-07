@@ -36,5 +36,13 @@ object DatabaseModule {
 
     @Provides
     @Singleton
+    fun provideMessageDao(db: AppDatabase) = db.messageDao()
+
+    @Provides
+    @Singleton
+    fun provideReadReceiptDao(db: AppDatabase) = db.readReceiptDao()
+
+    @Provides
+    @Singleton
     fun provideNotificationDao(db: AppDatabase) = db.notificationDao()
 }

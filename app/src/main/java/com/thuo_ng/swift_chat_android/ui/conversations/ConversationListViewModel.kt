@@ -3,6 +3,7 @@ package com.thuo_ng.swift_chat_android.ui.conversations
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
+import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -17,10 +18,13 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
-    private val conversationRepository: ConversationRepository
+    private val conversationRepository: ConversationRepository,
+    private val secureStorage: SecureStorage
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ConversationUiState())
+    private val _uiState = MutableStateFlow(
+        ConversationUiState(currentAccountId = secureStorage.getUserId())
+    )
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
 
     private val _effect = Channel<ConversationEffect>(Channel.BUFFERED)

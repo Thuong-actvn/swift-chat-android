@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
+import com.thuo_ng.swift_chat_android.domain.model.MessagePreview
 import com.thuo_ng.swift_chat_android.ui.components.UnreadBadge
 import com.thuo_ng.swift_chat_android.ui.components.UserAvatar
 import java.time.Instant
@@ -28,6 +29,7 @@ import java.time.temporal.ChronoUnit
 @Composable
 fun ConversationItem(
     conversation: Conversation,
+    currentAccountId: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -78,13 +80,16 @@ fun ConversationItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val lastMessageText = if (conversation.lastMessage != null) {
+                    val messageBody = conversation.lastMessage.displayContent()
                     val prefix = if (
+                        messageBody.isNotBlank() &&
                         conversation.type.equals("group", ignoreCase = true) &&
-                        conversation.lastMessage.senderName != null
+                        conversation.lastMessage.senderName != null &&
+                        conversation.lastMessage.senderId != currentAccountId
                     ) {
                         "${conversation.lastMessage.senderName}: "
                     } else ""
-                    prefix + conversation.lastMessage.content
+                    prefix + messageBody
                 } else {
                     "No messages yet"
                 }
@@ -107,6 +112,16 @@ fun ConversationItem(
                 }
             }
         }
+    }
+}
+
+private fun MessagePreview.displayContent(): String {
+    if (content.isNotBlank()) return content
+    return when (type.lowercase()) {
+        "image" -> "Image"
+        "file" -> "File"
+        "video" -> "Video"
+        else -> ""
     }
 }
 

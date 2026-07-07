@@ -2,10 +2,19 @@ package com.thuo_ng.swift_chat_android.core.socket
 
 data class SendMessagePayload(
     val conversationId: String,
-    val content: String,
-    val type: String = "text",        // "text" | "image" | "file"
-    val clientTempId: String,         // UUID tạo phía client để match optimistic update
-    val replyToId: String? = null
+    val content: String? = null,
+    val type: String = "text",
+    val clientTempId: String,
+    val replyToMessageId: String? = null,
+    val attachments: List<String> = emptyList(),
+    val mentions: List<String> = emptyList(),
+    val forwardFromMessageId: String? = null
+)
+
+data class SocketAckResult(
+    val status: String? = null,
+    val messageId: String? = null,
+    val error: String? = null
 )
 
 data class EditMessagePayload(
@@ -22,10 +31,9 @@ data class ReactPayload(
 
 data class MarkReadPayload(
     val conversationId: String,
-    val messageId: String             // messageId cuối cùng đã đọc
+    val messageId: String
 )
 
-// Dùng chung cho các action chỉ cần messageId và conversationId (unsend, delete_for_me, pin, unpin)
 data class MessageActionPayload(
     val messageId: String,
     val conversationId: String

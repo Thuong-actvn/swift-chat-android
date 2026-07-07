@@ -7,6 +7,8 @@ import com.thuo_ng.swift_chat_android.data.mapper.toDomain
 import com.thuo_ng.swift_chat_android.data.mapper.toEntity
 import com.thuo_ng.swift_chat_android.data.mapper.toParticipantPreviewEntities
 import com.thuo_ng.swift_chat_android.data.remote.api.ConversationApi
+import com.thuo_ng.swift_chat_android.data.remote.api.MessageApi
+import com.thuo_ng.swift_chat_android.data.remote.dto.displayMessagePreviewContent
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
 import com.thuo_ng.swift_chat_android.domain.model.ConversationPage
 import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
@@ -16,6 +18,7 @@ import javax.inject.Inject
 
 class ConversationRepositoryImpl @Inject constructor(
     private val conversationApi: ConversationApi,
+    private val messageApi: MessageApi,
     private val conversationDao: ConversationDao
 ) : ConversationRepository {
 
@@ -37,9 +40,41 @@ class ConversationRepositoryImpl @Inject constructor(
                     conversations = conversationDtos.map { it.toEntity() },
                     participantPreviews = conversationDtos.flatMap { it.toParticipantPreviewEntities() }
                 )
+                hydrateBlankAttachmentPreviews(conversationDtos.map { it.toEntity() })
                 NetworkResult.Success(result.data.toDomain())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
+    }
+
+    private suspend fun hydrateBlankAttachmentPreviews(conversations: List<com.thuo_ng.swift_chat_android.data.local.entity.ConversationEntity>) {
+        conversations
+            .filter { it.lastMessageId != null && it.lastMessageContent.isNullOrBlank() }
+            .forEach { conversation ->
+                when (val result = safeApiCall { messageApi.getMessages(conversationId = conversation.id, limit = 1) }) {
+                    is NetworkResult.Success -> {
+                        val message = result.data.firstOrNull() ?: return@forEach
+                        val preview = displayMessagePreviewContent(
+                            content = message.content,
+                            type = message.type,
+                            isUnsent = message.isUnsent,
+                            attachments = message.attachments
+                        )
+                        if (preview.isBlank()) return@forEach
+
+                        conversationDao.updateLastMessage(
+                            conversationId = conversation.id,
+                            messageId = message.id,
+                            content = preview,
+                            senderId = message.senderId,
+                            senderName = conversation.lastMessageSenderName,
+                            timestamp = message.createdAt,
+                            type = message.type,
+                            unreadIncrement = 0
+                        )
+                    }
+                    is NetworkResult.Error -> Unit
+                }
+            }
     }
 }

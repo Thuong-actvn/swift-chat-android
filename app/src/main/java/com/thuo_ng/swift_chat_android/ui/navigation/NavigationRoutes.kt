@@ -12,6 +12,7 @@ import kotlinx.serialization.Serializable
 
 // ── Main (tab) routes ────────────────────────────────────
 @Serializable object Conversations
+@Serializable data class ChatDetail(val conversationId: String)
 
 @Serializable object Friends
 @Serializable object Notifications

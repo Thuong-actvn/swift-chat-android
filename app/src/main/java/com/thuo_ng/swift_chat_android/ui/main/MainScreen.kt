@@ -48,7 +48,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.thuo_ng.swift_chat_android.ui.chat.ChatDetailScreen
 import com.thuo_ng.swift_chat_android.ui.conversations.ConversationListScreen
+import com.thuo_ng.swift_chat_android.ui.navigation.ChatDetail
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
@@ -84,72 +87,79 @@ fun MainScreen(
     val currentDestination = navBackStackEntry?.destination
     val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
     val notificationUnreadCount = notificationState.unreadCount
+    val showBottomBar = currentDestination == null || tabs.any { tab ->
+        currentDestination.hierarchy.any { destination ->
+            destination.hasRoute(tab.route::class)
+        }
+    }
 
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                modifier = Modifier
-                    .dropShadow(
-                        shape = MaterialTheme.shapes.large,
-                        shadow = Shadow(
-                            radius = 16.dp,
-                            spread = 0.dp,
-                            color = Color.Black.copy(alpha = 0.08f),
-                            offset = DpOffset(x = 0.dp, (-8).dp)
-                        )
-                    )
-            ) {
-                Row(
+            if (showBottomBar) {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp)
-                ) {
-                    tabs.forEach { tab ->
-                        val selected = currentDestination?.hierarchy?.any {
-                            it.hasRoute(tab.route::class)
-                        } == true
-
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                mainNavController.navigate(tab.route) {
-                                    popUpTo(mainNavController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                BadgedBox(
-                                    badge = {
-                                        if (tab.route == Notifications && notificationUnreadCount > 0) {
-                                            Badge {
-                                                Text(formatBadgeCount(notificationUnreadCount))
-                                            }
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                        contentDescription = tab.label
-                                    )
-                                }
-                            },
-                            label = { Text(tab.label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.6f
-                                ),
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.6f
-                                ),
-                                indicatorColor = Color.Transparent
+                        .dropShadow(
+                            shape = MaterialTheme.shapes.large,
+                            shadow = Shadow(
+                                radius = 16.dp,
+                                spread = 0.dp,
+                                color = Color.Black.copy(alpha = 0.08f),
+                                offset = DpOffset(x = 0.dp, (-8).dp)
                             )
                         )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp)
+                    ) {
+                        tabs.forEach { tab ->
+                            val selected = currentDestination?.hierarchy?.any {
+                                it.hasRoute(tab.route::class)
+                            } == true
+
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    mainNavController.navigate(tab.route) {
+                                        popUpTo(mainNavController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    BadgedBox(
+                                        badge = {
+                                            if (tab.route == Notifications && notificationUnreadCount > 0) {
+                                                Badge {
+                                                    Text(formatBadgeCount(notificationUnreadCount))
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                            contentDescription = tab.label
+                                        )
+                                    }
+                                },
+                                label = { Text(tab.label) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = 0.6f
+                                    ),
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                        alpha = 0.6f
+                                    ),
+                                    indicatorColor = Color.Transparent
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -164,14 +174,28 @@ fun MainScreen(
         ) {
             composable<Conversations> {
                 ConversationListScreen(
-                    onConversationClick = { /* TODO: Navigate to chat detail */ }
+                    onConversationClick = { conversationId ->
+                        mainNavController.navigate(ChatDetail(conversationId))
+                    }
+                )
+            }
+            composable<ChatDetail> { entry ->
+                val route = entry.toRoute<ChatDetail>()
+                ChatDetailScreen(
+                    conversationId = route.conversationId,
+                    onBack = { mainNavController.popBackStack() }
                 )
             }
             composable<Friends> {
                 PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
             }
             composable<Notifications> {
-                NotificationScreen(viewModel = notificationViewModel)
+                NotificationScreen(
+                    onOpenConversation = { conversationId ->
+                        mainNavController.navigate(ChatDetail(conversationId))
+                    },
+                    viewModel = notificationViewModel
+                )
             }
             composable<Profile> {
                 ProfileScreen(

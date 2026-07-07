@@ -33,6 +33,7 @@ data class CurrentParticipant(
 )
 
 data class ParticipantPreview(
+    val accountId: String? = null,
     val handle: String,
     val displayName: String,
     val avatarUrl: String?

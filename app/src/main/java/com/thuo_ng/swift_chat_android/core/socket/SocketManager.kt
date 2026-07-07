@@ -8,6 +8,7 @@ import com.google.gson.Gson
 import com.thuo_ng.swift_chat_android.BuildConfig
 import com.thuo_ng.swift_chat_android.core.network.TokenRefreshManager
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
+import io.socket.client.Ack
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.*
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import org.json.JSONObject
+import kotlin.coroutines.resume
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -233,6 +235,14 @@ class SocketManager @Inject constructor(
         return emit("chat:send_message", payload.toJsonObject())
     }
 
+    suspend fun sendMessageWithAck(
+        payload: SendMessagePayload,
+        timeoutMs: Long = 10_000L
+    ): Result<SocketAckResult> {
+        Log.d(TAG, "Emitting chat:send_message with ack clientTempId=${payload.clientTempId}")
+        return emitWithAck("chat:send_message", payload.toJsonObject(), timeoutMs)
+    }
+
     fun sendTyping(conversationId: String): Boolean {
         Log.d(TAG, "Emitting typing state for conversation $conversationId")
         return emit("chat:typing", JSONObject().put("conversationId", conversationId))
@@ -352,6 +362,78 @@ class SocketManager @Inject constructor(
         Log.d(TAG, "EMIT: event='$event' payload=$data")
         currentSocket.emit(event, data)
         return true
+    }
+
+    private suspend fun emitWithAck(
+        event: String,
+        data: JSONObject,
+        timeoutMs: Long
+    ): Result<SocketAckResult> {
+        val currentSocket = socket
+        if (currentSocket?.connected() != true) {
+            val message = "Socket is not connected"
+            Log.w(TAG, "Skip emit ack: $message. event='$event' payload=$data")
+            return Result.failure(IllegalStateException(message))
+        }
+
+        return try {
+            withTimeout(timeoutMs) {
+                suspendCancellableCoroutine { continuation ->
+                    Log.d(TAG, "EMIT_ACK: event='$event' payload=$data")
+                    currentSocket.emit(
+                        event,
+                        data,
+                        Ack { args ->
+                            if (continuation.isActive) {
+                                continuation.resume(parseAck(args))
+                            }
+                        }
+                    )
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.w(TAG, "Ack timeout for event='$event'", e)
+            Result.failure(e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ack emit failed for event='$event'", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun parseAck(args: Array<Any>): Result<SocketAckResult> {
+        if (args.isEmpty()) {
+            return Result.success(SocketAckResult(status = "ok"))
+        }
+
+        return try {
+            val first = args[0]
+            val json = when (first) {
+                is JSONObject -> first
+                else -> JSONObject(first.toString())
+            }
+            val status = json.optString("status", json.optString("ok", "ok"))
+            val messageId = json.optNullableString("messageId")
+            val error = json.optNullableString("error") ?: json.optNullableString("message")
+            val ack = SocketAckResult(
+                status = status,
+                messageId = messageId,
+                error = error
+            )
+
+            if (status.equals("error", ignoreCase = true) || !error.isNullOrBlank()) {
+                Result.failure(IllegalStateException(error ?: "Socket ack error"))
+            } else {
+                Result.success(ack)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse socket ack", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun JSONObject.optNullableString(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() }
     }
 
     private fun Socket.onEvent(event: String, handler: (Array<Any>) -> Unit) {

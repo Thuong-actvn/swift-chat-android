@@ -9,6 +9,7 @@ enum class ConversationFilter {
 
 data class ConversationUiState(
     val conversations: List<Conversation> = emptyList(),
+    val currentAccountId: String? = null,
     val selectedFilter: ConversationFilter = ConversationFilter.Chats,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,

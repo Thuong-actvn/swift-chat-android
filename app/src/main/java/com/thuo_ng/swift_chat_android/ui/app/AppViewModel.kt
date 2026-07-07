@@ -2,12 +2,14 @@ package com.thuo_ng.swift_chat_android.ui.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.thuo_ng.swift_chat_android.core.session.SessionEvent
 import com.thuo_ng.swift_chat_android.core.session.SessionManager
 import com.thuo_ng.swift_chat_android.core.socket.SocketConnectionState
 import com.thuo_ng.swift_chat_android.core.socket.SocketEvent
 import com.thuo_ng.swift_chat_android.core.socket.SocketManager
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
+import com.thuo_ng.swift_chat_android.domain.repository.ChatRepository
 import com.thuo_ng.swift_chat_android.domain.repository.NotificationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -25,8 +27,12 @@ class AppViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager,
     private val socketManager: SocketManager,
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
+    private companion object {
+        const val TAG = "AppViewModel"
+    }
 
     val authState: StateFlow<AppAuthState> = authRepository.isLoggedInFlow
         .map { isLoggedIn ->
@@ -63,15 +69,32 @@ class AppViewModel @Inject constructor(
 
         viewModelScope.launch {
             socketManager.events.collect { event ->
-                when (event) {
-                    is SocketEvent.NewNotification,
-                    is SocketEvent.GroupInfoUpdated,
-                    is SocketEvent.GroupMemberAdded,
-                    is SocketEvent.GroupMemberRemoved,
-                    is SocketEvent.GroupDisbanded,
-                    is SocketEvent.GroupRoleChanged,
-                    is SocketEvent.GroupYouAdded -> notificationRepository.handleSocketEvent(event)
-                    else -> Unit
+                runCatching {
+                    when (event) {
+                        is SocketEvent.ReceiveMessage,
+                        is SocketEvent.UserTyping,
+                        is SocketEvent.UserStopTyping,
+                        is SocketEvent.MessageUnsent,
+                        is SocketEvent.MessageDeletedForMe,
+                        is SocketEvent.MessageEdited,
+                        is SocketEvent.ReadReceipt,
+                        is SocketEvent.ReactionUpdated,
+                        is SocketEvent.MessagePinned,
+                        is SocketEvent.MessageUnpinned -> chatRepository.handleSocketEvent(event)
+                        is SocketEvent.NewNotification,
+                        is SocketEvent.GroupInfoUpdated,
+                        is SocketEvent.GroupMemberAdded,
+                        is SocketEvent.GroupMemberRemoved,
+                        is SocketEvent.GroupDisbanded,
+                        is SocketEvent.GroupRoleChanged,
+                        is SocketEvent.GroupYouAdded -> {
+                            chatRepository.handleSocketEvent(event)
+                            notificationRepository.handleSocketEvent(event)
+                        }
+                        else -> Unit
+                    }
+                }.onFailure { error ->
+                    Log.e(TAG, "Socket event handling failed: $event", error)
                 }
             }
         }

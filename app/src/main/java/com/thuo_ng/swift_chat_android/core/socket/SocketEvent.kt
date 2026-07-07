@@ -1,30 +1,85 @@
 package com.thuo_ng.swift_chat_android.core.socket
 
 sealed class SocketEvent {
-
-    // ── Chat events ──────────────────────────────────────────────
     data class ReceiveMessage(val payload: MessagePayload) : SocketEvent()
-    data class UserTyping(val conversationId: String, val userId: String, val username: String) : SocketEvent()
-    data class UserStopTyping(val conversationId: String, val userId: String) : SocketEvent()
-    data class MessageUnsent(val messageId: String, val conversationId: String) : SocketEvent()
-    data class MessageDeletedForMe(val messageId: String) : SocketEvent()
-    data class MessageEdited(val messageId: String, val newContent: String, val conversationId: String) : SocketEvent()
-    data class ReadReceipt(val conversationId: String, val userId: String, val lastReadMessageId: String) : SocketEvent()
-    data class ReactionUpdated(val messageId: String, val reactions: List<ReactionPayload>) : SocketEvent()
-    data class MessagePinned(val messageId: String, val conversationId: String) : SocketEvent()
-    data class MessageUnpinned(val messageId: String, val conversationId: String) : SocketEvent()
+    data class UserTyping(
+        val conversationId: String,
+        val accountId: String,
+        val displayName: String? = null,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class UserStopTyping(
+        val conversationId: String,
+        val accountId: String,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class MessageUnsent(
+        val messageId: String,
+        val conversationId: String,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class MessageDeletedForMe(
+        val messageId: String,
+        val conversationId: String,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class MessageEdited(
+        val messageId: String,
+        val conversationId: String,
+        val content: String,
+        val editedBy: String? = null,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class ReadReceipt(
+        val conversationId: String,
+        val accountId: String,
+        val messageId: String,
+        val handle: String? = null,
+        val displayName: String? = null,
+        val avatarUrl: String? = null,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class ReactionUpdated(
+        val conversationId: String,
+        val messageId: String,
+        val reactions: List<ReactionPayload>? = emptyList()
+    ) : SocketEvent()
+    data class MessagePinned(
+        val messageId: String,
+        val conversationId: String,
+        val pinnedBy: String? = null,
+        val timestamp: String? = null
+    ) : SocketEvent()
+    data class MessageUnpinned(
+        val messageId: String,
+        val conversationId: String,
+        val timestamp: String? = null
+    ) : SocketEvent()
 
-    // ── Presence ─────────────────────────────────────────────────
-    data class PresenceStatus(val userId: String, val accountId: String, val status: String, val timestamp: Long) : SocketEvent()
+    data class PresenceStatus(
+        val userId: String,
+        val accountId: String,
+        val status: String,
+        val timestamp: Long
+    ) : SocketEvent()
 
-    // ── Notification ─────────────────────────────────────────────
-    data class NewNotification(val id: String, val type: String, val referenceId: String?, val isRead: Boolean, val createdAt: String, val actor: ActorPayload?) : SocketEvent()
+    data class NewNotification(
+        val id: String,
+        val type: String,
+        val referenceId: String?,
+        val isRead: Boolean,
+        val createdAt: String,
+        val actor: ActorPayload?
+    ) : SocketEvent()
 
-    // ── Friend ───────────────────────────────────────────────────
-    object FriendUpdated : SocketEvent()   // signal → client tự refetch
+    data object FriendUpdated : SocketEvent()
 
-    // ── Group ────────────────────────────────────────────────────
-    data class GroupInfoUpdated(val conversationId: String, val title: String?, val avatarUrl: String?, val updatedBy: String) : SocketEvent()
+    data class GroupInfoUpdated(
+        val conversationId: String,
+        val title: String?,
+        val avatarUrl: String?,
+        val updatedBy: String
+    ) : SocketEvent()
     data class GroupMemberAdded(val conversationId: String, val addedUserIds: List<String>, val addedBy: String) : SocketEvent()
     data class GroupMemberRemoved(val conversationId: String, val removedUserId: String, val removedBy: String) : SocketEvent()
     data class GroupDisbanded(val conversationId: String, val disbandedBy: String) : SocketEvent()
@@ -32,20 +87,67 @@ sealed class SocketEvent {
     data class GroupYouAdded(val conversationId: String, val addedBy: String) : SocketEvent()
 }
 
-// ── Payload data classes ──────────────────────────────────────
 data class MessagePayload(
     val id: String,
     val conversationId: String,
     val senderId: String,
-    val content: String,
-    val type: String,             // "text" | "image" | "video" | "file"
-    val clientTempId: String?,    // Optimistic update matching
-    val replyToId: String?,
-    val isDeleted: Boolean,
-    val isEdited: Boolean,
+    val sender: SenderPayload? = null,
+    val senderHandle: String? = null,
+    val senderName: String? = null,
+    val senderDisplayName: String? = null,
+    val senderAvatar: String? = null,
+    val senderAvatarUrl: String? = null,
+    val handle: String? = null,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
+    val content: String? = "",
+    val type: String,
+    val clientTempId: String? = null,
+    val replyToMessageId: String? = null,
+    val replyTo: ReplyTargetPayload? = null,
+    val isDeleted: Boolean = false,
+    val isEdited: Boolean = false,
+    val isUnsent: Boolean = false,
+    val isPinned: Boolean? = false,
+    val pinnedBy: String? = null,
+    val pinnedAt: String? = null,
     val createdAt: String,
-    val reactions: List<ReactionPayload> = emptyList()
+    val updatedAt: String? = null,
+    val attachments: List<String>? = emptyList(),
+    val reactions: List<ReactionPayload>? = emptyList(),
+    val forwardedFrom: ForwardedFromPayload? = null
 )
 
-data class ReactionPayload(val emoji: String, val count: Int, val userIds: List<String>)
+data class SenderPayload(
+    val id: String? = null,
+    val accountId: String? = null,
+    val userId: String? = null,
+    val handle: String? = null,
+    val username: String? = null,
+    val displayName: String? = null,
+    val name: String? = null,
+    val avatar: String? = null,
+    val avatarUrl: String? = null
+)
+
+data class ReplyTargetPayload(
+    val messageId: String,
+    val senderId: String,
+    val content: String,
+    val type: String
+)
+
+data class ForwardedFromPayload(
+    val messageId: String,
+    val conversationId: String
+)
+
+data class ReactionPayload(
+    val emoji: String = "",
+    val count: Int = 0,
+    val userIds: List<String>? = emptyList(),
+    val accountId: String? = null,
+    val createdAt: String? = null
+)
+
 data class ActorPayload(val id: String, val username: String, val avatarUrl: String?)

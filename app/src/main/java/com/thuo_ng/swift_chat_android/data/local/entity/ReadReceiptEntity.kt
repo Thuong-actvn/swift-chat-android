@@ -5,8 +5,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 
 @Entity(
-    tableName = "conversation_participant_previews",
-    primaryKeys = ["conversationId", "position"],
+    tableName = "read_receipts",
+    primaryKeys = ["conversationId", "accountId"],
     foreignKeys = [
         ForeignKey(
             entity = ConversationEntity::class,
@@ -17,15 +17,14 @@ import androidx.room.Index
     ],
     indices = [
         Index(value = ["conversationId"]),
-        Index(value = ["accountId"]),
-        Index(value = ["handle"])
+        Index(value = ["accountId"])
     ]
 )
-data class ConversationParticipantPreviewEntity(
+data class ReadReceiptEntity(
     val conversationId: String,
-    val position: Int,
-    val accountId: String?,
-    val handle: String,
-    val displayName: String,
+    val accountId: String,
+    val lastReadMessageId: String,
+    val handle: String?,
+    val displayName: String?,
     val avatarUrl: String?
 )

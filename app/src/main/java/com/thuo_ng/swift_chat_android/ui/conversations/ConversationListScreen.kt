@@ -165,6 +165,7 @@ private fun ConversationListContent(
                 )
                 else -> ConversationList(
                     conversations = state.visibleConversations,
+                    currentAccountId = state.currentAccountId,
                     onConversationClick = onConversationClick
                 )
             }
@@ -194,7 +195,7 @@ private fun ConversationTabs(
                             ConversationFilter.Chats -> "Chats"
                             ConversationFilter.Groups -> "Groups"
                         },
-                        style = MaterialTheme.typography.titleLarge.copy(
+                        style = MaterialTheme.typography.bodyMedium.copy(
                             fontWeight = FontWeight.SemiBold
                         )
                     )
@@ -207,6 +208,7 @@ private fun ConversationTabs(
 @Composable
 private fun ConversationList(
     conversations: List<Conversation>,
+    currentAccountId: String?,
     onConversationClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -220,6 +222,7 @@ private fun ConversationList(
         ) { conversation ->
             ConversationItem(
                 conversation = conversation,
+                currentAccountId = currentAccountId,
                 onClick = { onConversationClick(conversation.id) }
             )
         }
