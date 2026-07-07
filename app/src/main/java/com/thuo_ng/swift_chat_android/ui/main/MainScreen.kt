@@ -44,6 +44,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.thuo_ng.swift_chat_android.ui.conversations.ConversationListScreen
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
@@ -143,7 +144,9 @@ fun MainScreen(
                 .consumeWindowInsets(innerPadding)
         ) {
             composable<Conversations> {
-                PlaceholderTab(title = "Conversations", subtitle = "Chưa có cuộc trò chuyện nào!")
+                ConversationListScreen(
+                    onConversationClick = { /* TODO: Navigate to chat detail */ }
+                )
             }
             composable<Friends> {
                 PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
