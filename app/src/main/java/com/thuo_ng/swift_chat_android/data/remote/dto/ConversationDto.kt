@@ -8,6 +8,40 @@ import com.thuo_ng.swift_chat_android.domain.model.DisplayInfo
 import com.thuo_ng.swift_chat_android.domain.model.MessagePreview
 import com.thuo_ng.swift_chat_android.domain.model.ParticipantPreview
 
+data class CreateConversationRequestDto(
+    @SerializedName("type") val type: String,
+    @SerializedName("partnerId") val partnerId: String
+)
+
+data class ConversationDetailDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("type") val type: String,
+    @SerializedName("title") val title: String?,
+    @SerializedName("avatarUrl") val avatarUrl: String?,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String,
+    @SerializedName("participants") val participants: List<ConversationParticipantDto>
+)
+
+data class ConversationParticipantDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("accountId") val accountId: String,
+    @SerializedName("role") val role: String,
+    @SerializedName("joinAt") val joinAt: String,
+    @SerializedName("mutedUntil") val mutedUntil: String?,
+    @SerializedName("hiddenAt") val hiddenAt: String?,
+    @SerializedName("lastReadMessageId") val lastReadMessageId: String?,
+    @SerializedName("user") val user: UserBriefDto?
+)
+
+data class UserBriefDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("handle") val handle: String,
+    @SerializedName("displayName") val displayName: String?,
+    @SerializedName("avatarUrl") val avatarUrl: String?,
+    @SerializedName("lastSeen") val lastSeen: String?
+)
+
 data class ConversationResponseDto(
     @SerializedName("data") val data: List<ConversationDto>,
     @SerializedName("nextCursor") val nextCursor: String?,
@@ -49,12 +83,12 @@ data class ConversationDto(
 }
 
 data class DisplayInfoDto(
-    @SerializedName("title") val title: String,
+    @SerializedName("title") val title: String?,
     @SerializedName("avatarUrl") val avatarUrl: String?,
     @SerializedName("isOnline") val isOnline: Boolean?
 ) {
     fun toDomain(): DisplayInfo = DisplayInfo(
-        title = title,
+        title = title.orEmpty(),
         avatarUrl = avatarUrl,
         isOnline = isOnline
     )
@@ -79,13 +113,13 @@ data class ParticipantPreviewDto(
     @SerializedName("id") val id: String? = null,
     @SerializedName("userId") val userId: String? = null,
     @SerializedName("handle") val handle: String,
-    @SerializedName("displayName") val displayName: String,
+    @SerializedName("displayName") val displayName: String?,
     @SerializedName("avatarUrl") val avatarUrl: String?
 ) {
     fun toDomain(): ParticipantPreview = ParticipantPreview(
-        accountId = accountId ?: id ?: userId,
+        accountId = accountId,
         handle = handle,
-        displayName = displayName,
+        displayName = displayName ?: handle,
         avatarUrl = avatarUrl
     )
 }

@@ -9,4 +9,6 @@ interface ConversationRepository {
     fun observeConversations(): Flow<List<Conversation>>
     fun observeConversation(conversationId: String): Flow<Conversation?>
     suspend fun syncConversations(): NetworkResult<ConversationPage>
+    suspend fun findDirectConversationWith(accountId: String): NetworkResult<Conversation?>
+    suspend fun openOrCreateDirectConversation(accountId: String): NetworkResult<Conversation>
 }

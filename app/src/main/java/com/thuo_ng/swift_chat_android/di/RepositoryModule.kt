@@ -3,11 +3,13 @@ package com.thuo_ng.swift_chat_android.di
 import com.thuo_ng.swift_chat_android.data.repository.AuthRepositoryImpl
 import com.thuo_ng.swift_chat_android.data.repository.ChatRepositoryImpl
 import com.thuo_ng.swift_chat_android.data.repository.ConversationRepositoryImpl
+import com.thuo_ng.swift_chat_android.data.repository.FriendRepositoryImpl
 import com.thuo_ng.swift_chat_android.data.repository.NotificationRepositoryImpl
 import com.thuo_ng.swift_chat_android.data.repository.UserRepositoryImpl
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
 import com.thuo_ng.swift_chat_android.domain.repository.ChatRepository
 import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
+import com.thuo_ng.swift_chat_android.domain.repository.FriendRepository
 import com.thuo_ng.swift_chat_android.domain.repository.NotificationRepository
 import com.thuo_ng.swift_chat_android.domain.repository.UserRepository
 import dagger.Binds
@@ -48,4 +50,10 @@ abstract class RepositoryModule {
     abstract fun bindChatRepository(
         chatRepositoryImpl: ChatRepositoryImpl
     ): ChatRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindFriendRepository(
+        friendRepositoryImpl: FriendRepositoryImpl
+    ): FriendRepository
 }

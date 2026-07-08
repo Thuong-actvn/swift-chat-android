@@ -122,15 +122,28 @@ import java.util.Locale
 
 @Composable
 fun ChatDetailScreen(
-    conversationId: String,
+    conversationId: String? = null,
+    pendingPartnerId: String? = null,
+    pendingDisplayName: String? = null,
+    pendingAvatarUrl: String? = null,
     onBack: () -> Unit,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(conversationId) {
-        viewModel.handleIntent(ChatIntent.Start(conversationId))
+    LaunchedEffect(conversationId, pendingPartnerId) {
+        if (conversationId != null) {
+            viewModel.handleIntent(ChatIntent.Start(conversationId))
+        } else if (pendingPartnerId != null && pendingDisplayName != null) {
+            viewModel.handleIntent(
+                ChatIntent.StartPendingDirect(
+                    partnerId = pendingPartnerId,
+                    displayName = pendingDisplayName,
+                    avatarUrl = pendingAvatarUrl
+                )
+            )
+        }
     }
 
     LaunchedEffect(Unit) {

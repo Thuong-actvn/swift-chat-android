@@ -3,7 +3,9 @@ package com.thuo_ng.swift_chat_android.data.mapper
 import com.thuo_ng.swift_chat_android.data.local.entity.ConversationEntity
 import com.thuo_ng.swift_chat_android.data.local.entity.ConversationParticipantPreviewEntity
 import com.thuo_ng.swift_chat_android.data.local.relation.ConversationWithParticipantPreviews
+import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationDetailDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationParticipantDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationMemberDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.displayMessagePreviewContent
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
@@ -16,7 +18,7 @@ fun ConversationDto.toEntity(): ConversationEntity =
     ConversationEntity(
         id = id,
         type = type,
-        displayTitle = displayInfo.title,
+        displayTitle = displayInfo.title.orEmpty(),
         avatarUrl = displayInfo.avatarUrl,
         isOnline = displayInfo.isOnline,
         createdAt = createdAt,
@@ -42,12 +44,112 @@ fun ConversationDto.toParticipantPreviewEntities(): List<ConversationParticipant
         ConversationParticipantPreviewEntity(
             conversationId = id,
             position = index,
-            accountId = preview.accountId ?: preview.id ?: preview.userId,
+            accountId = preview.accountId,
             handle = preview.handle,
-            displayName = preview.displayName,
+            displayName = preview.displayName?.takeIf { it.isNotBlank() } ?: preview.handle,
             avatarUrl = preview.avatarUrl
         )
     }
+
+fun ConversationDetailDto.toEntity(
+    currentAccountId: String?,
+    partnerAccountId: String
+): ConversationEntity {
+    val partner = directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
+    val currentParticipant = participants.firstOrNull { it.accountId == currentAccountId }
+    return ConversationEntity(
+        id = id,
+        type = type,
+        displayTitle = resolvedTitle(partner),
+        avatarUrl = avatarUrl ?: partner?.user?.avatarUrl,
+        isOnline = null,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        unreadCount = 0,
+        currentParticipantRole = currentParticipant?.role,
+        currentParticipantIsMuted = currentParticipant?.mutedUntil != null,
+        currentParticipantMutedUntil = currentParticipant?.mutedUntil,
+        currentParticipantLastReadMessageId = currentParticipant?.lastReadMessageId,
+        totalParticipants = participants.size,
+        lastMessageId = null,
+        lastMessageContent = null,
+        lastMessageSenderId = null,
+        lastMessageSenderName = null,
+        lastMessageTimestamp = null,
+        lastMessageType = null
+    )
+}
+
+fun ConversationDetailDto.toParticipantPreviewEntities(): List<ConversationParticipantPreviewEntity> =
+    participants.mapIndexed { index, participant ->
+        ConversationParticipantPreviewEntity(
+            conversationId = id,
+            position = index,
+            accountId = participant.accountId,
+            handle = participant.user?.handle?.takeIf { it.isNotBlank() } ?: participant.accountId,
+            displayName = participant.user?.displayName?.takeIf { it.isNotBlank() }
+                ?: participant.user?.handle?.takeIf { it.isNotBlank() }
+                ?: participant.accountId,
+            avatarUrl = participant.user?.avatarUrl
+        )
+    }
+
+fun ConversationDetailDto.toDomain(
+    currentAccountId: String?,
+    partnerAccountId: String
+): Conversation {
+    val partner = directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
+    val currentParticipant = participants.firstOrNull { it.accountId == currentAccountId }
+    return Conversation(
+        id = id,
+        type = type,
+        displayInfo = DisplayInfo(
+            title = resolvedTitle(partner),
+            avatarUrl = avatarUrl ?: partner?.user?.avatarUrl,
+            isOnline = null
+        ),
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        unreadCount = 0,
+        currentParticipant = currentParticipant?.let {
+            CurrentParticipant(
+                role = it.role,
+                isMuted = it.mutedUntil != null,
+                mutedUntil = it.mutedUntil,
+                lastReadMessageId = it.lastReadMessageId
+            )
+        },
+        participantPreview = participants.map { it.toDomain() },
+        totalParticipants = participants.size,
+        lastMessage = null
+    )
+}
+
+private fun ConversationDetailDto.directPartner(
+    currentAccountId: String?,
+    partnerAccountId: String
+): ConversationParticipantDto? {
+    return participants.firstOrNull { it.accountId == partnerAccountId }
+        ?: participants.firstOrNull { it.accountId != currentAccountId }
+        ?: participants.firstOrNull()
+}
+
+private fun ConversationDetailDto.resolvedTitle(partner: ConversationParticipantDto?): String {
+    return title?.takeIf { it.isNotBlank() }
+        ?: partner?.user?.displayName?.takeIf { it.isNotBlank() }
+        ?: partner?.user?.handle?.takeIf { it.isNotBlank() }
+        ?: "Direct message"
+}
+
+private fun ConversationParticipantDto.toDomain(): ParticipantPreview =
+    ParticipantPreview(
+        accountId = accountId,
+        handle = user?.handle?.takeIf { it.isNotBlank() } ?: accountId,
+        displayName = user?.displayName?.takeIf { it.isNotBlank() }
+            ?: user?.handle?.takeIf { it.isNotBlank() }
+            ?: accountId,
+        avatarUrl = user?.avatarUrl
+    )
 
 fun List<ConversationMemberDto>.toParticipantPreviewEntities(
     conversationId: String

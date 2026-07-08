@@ -18,7 +18,11 @@ interface ChatRepository {
 
     suspend fun syncLatestMessages(conversationId: String): NetworkResult<Int>
     suspend fun loadOlderMessages(conversationId: String): NetworkResult<Boolean>
-    suspend fun sendTextMessage(conversationId: String, content: String): Result<Unit>
+    suspend fun sendTextMessage(
+        conversationId: String,
+        content: String,
+        clientTempId: String? = null
+    ): Result<Unit>
     suspend fun sendAttachmentMessage(
         conversationId: String,
         uri: Uri,

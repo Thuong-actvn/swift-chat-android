@@ -1,9 +1,7 @@
 package com.thuo_ng.swift_chat_android.ui.main
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -26,18 +24,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -51,11 +45,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.thuo_ng.swift_chat_android.ui.chat.ChatDetailScreen
 import com.thuo_ng.swift_chat_android.ui.conversations.ConversationListScreen
+import com.thuo_ng.swift_chat_android.ui.friends.FriendsScreen
+import com.thuo_ng.swift_chat_android.ui.friends.FriendsViewModel
 import com.thuo_ng.swift_chat_android.ui.navigation.ChatDetail
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
 import com.thuo_ng.swift_chat_android.ui.navigation.Notifications
+import com.thuo_ng.swift_chat_android.ui.navigation.PendingDirectChat
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
 import com.thuo_ng.swift_chat_android.ui.notifications.NotificationScreen
 import com.thuo_ng.swift_chat_android.ui.notifications.NotificationViewModel
@@ -80,13 +77,16 @@ private val tabs = listOf(
 fun MainScreen(
     rootNavController: NavController,
     onLogout: () -> Unit,
-    notificationViewModel: NotificationViewModel = hiltViewModel()
+    notificationViewModel: NotificationViewModel = hiltViewModel(),
+    friendsViewModel: FriendsViewModel = hiltViewModel()
 ) {
     val mainNavController = rememberNavController()
     val navBackStackEntry by mainNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val notificationState by notificationViewModel.uiState.collectAsStateWithLifecycle()
+    val friendsState by friendsViewModel.uiState.collectAsStateWithLifecycle()
     val notificationUnreadCount = notificationState.unreadCount
+    val friendsRequestCount = friendsState.requestBadgeCount
     val showBottomBar = currentDestination == null || tabs.any { tab ->
         currentDestination.hierarchy.any { destination ->
             destination.hasRoute(tab.route::class)
@@ -133,10 +133,13 @@ fun MainScreen(
                                 icon = {
                                     BadgedBox(
                                         badge = {
-                                            if (tab.route == Notifications && notificationUnreadCount > 0) {
-                                                Badge {
-                                                    Text(formatBadgeCount(notificationUnreadCount))
-                                                }
+                                            val badgeCount = when (tab.route) {
+                                                Friends -> friendsRequestCount
+                                                Notifications -> notificationUnreadCount
+                                                else -> 0
+                                            }
+                                            if (badgeCount > 0) {
+                                                Badge { Text(formatBadgeCount(badgeCount)) }
                                             }
                                         }
                                     ) {
@@ -186,8 +189,25 @@ fun MainScreen(
                     onBack = { mainNavController.popBackStack() }
                 )
             }
+            composable<PendingDirectChat> { entry ->
+                val route = entry.toRoute<PendingDirectChat>()
+                ChatDetailScreen(
+                    pendingPartnerId = route.partnerId,
+                    pendingDisplayName = route.displayName,
+                    pendingAvatarUrl = route.avatarUrl,
+                    onBack = { mainNavController.popBackStack() }
+                )
+            }
             composable<Friends> {
-                PlaceholderTab(title = "Friends", subtitle = "Chưa có bạn bè!")
+                FriendsScreen(
+                    onOpenPendingDirectChat = { partnerId, displayName, avatarUrl ->
+                        mainNavController.navigate(PendingDirectChat(partnerId, displayName, avatarUrl))
+                    },
+                    onOpenConversation = { conversationId ->
+                        mainNavController.navigate(ChatDetail(conversationId))
+                    },
+                    viewModel = friendsViewModel
+                )
             }
             composable<Notifications> {
                 NotificationScreen(
@@ -209,26 +229,6 @@ fun MainScreen(
 
 private fun formatBadgeCount(count: Int): String {
     return if (count > 99) "99+" else count.toString()
-}
-
-/**
- * Tab placeholder đơn giản — hiển thị tiêu đề + mô tả.
- */
-@Composable
-private fun PlaceholderTab(title: String, subtitle: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "$title\n$subtitle",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            fontSize = 16.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
 }
 
 @Preview(showBackground = true, showSystemUi = true)

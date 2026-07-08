@@ -8,6 +8,7 @@ import com.thuo_ng.swift_chat_android.domain.model.TypingUser
 
 data class ChatUiState(
     val conversationId: String = "",
+    val pendingDirect: PendingDirectChatInfo? = null,
     val conversation: Conversation? = null,
     val messages: List<Message> = emptyList(),
     val readReceipts: List<ReadReceipt> = emptyList(),
@@ -20,12 +21,23 @@ data class ChatUiState(
     val hasMoreOlderMessages: Boolean = true,
     val errorMessage: String? = null
 ) {
-    val canSend: Boolean get() = inputText.isNotBlank()
+    val canSend: Boolean get() = inputText.isNotBlank() && !isInitialSyncing
     val shouldShowSendButton: Boolean get() = inputText.isNotBlank() || isInputFocused
 }
 
+data class PendingDirectChatInfo(
+    val partnerId: String,
+    val displayName: String,
+    val avatarUrl: String?
+)
+
 sealed class ChatIntent {
     data class Start(val conversationId: String) : ChatIntent()
+    data class StartPendingDirect(
+        val partnerId: String,
+        val displayName: String,
+        val avatarUrl: String?
+    ) : ChatIntent()
     data class InputChanged(val value: String) : ChatIntent()
     data class InputFocusChanged(val focused: Boolean) : ChatIntent()
     data object SendClicked : ChatIntent()

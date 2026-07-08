@@ -17,6 +17,7 @@ import com.thuo_ng.swift_chat_android.data.local.dao.ReadReceiptDao
 import com.thuo_ng.swift_chat_android.data.local.entity.MessageReactionEntity
 import com.thuo_ng.swift_chat_android.data.mapper.optimisticMessageGraph
 import com.thuo_ng.swift_chat_android.data.mapper.toDomain
+import com.thuo_ng.swift_chat_android.data.mapper.toEntity
 import com.thuo_ng.swift_chat_android.data.mapper.toEntityGraph
 import com.thuo_ng.swift_chat_android.data.mapper.toParticipantPreviewEntities
 import com.thuo_ng.swift_chat_android.data.remote.api.ConversationApi
@@ -103,14 +104,19 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun sendTextMessage(conversationId: String, content: String): Result<Unit> {
+    override suspend fun sendTextMessage(
+        conversationId: String,
+        content: String,
+        clientTempId: String?
+    ): Result<Unit> {
         val trimmed = content.trim()
         if (trimmed.isEmpty()) return Result.success(Unit)
         return sendOptimisticMessage(
             conversationId = conversationId,
             content = trimmed,
             type = "text",
-            attachments = emptyList()
+            attachments = emptyList(),
+            clientTempId = clientTempId ?: UUID.randomUUID().toString()
         )
     }
 
@@ -279,18 +285,38 @@ class ChatRepositoryImpl @Inject constructor(
             }
             is SocketEvent.UserTyping -> handleTyping(event)
             is SocketEvent.UserStopTyping -> removeTypingUser(event.conversationId, event.accountId)
-            is SocketEvent.GroupInfoUpdated -> conversationDao.updateGroupInfo(
-                conversationId = event.conversationId,
-                title = event.title,
-                avatarUrl = event.avatarUrl,
-                updatedAt = Instant.now().toString()
-            )
+            is SocketEvent.GroupInfoUpdated -> {
+                if (!conversationDao.exists(event.conversationId)) {
+                    syncConversationListFromServer()
+                }
+                conversationDao.updateGroupInfo(
+                    conversationId = event.conversationId,
+                    title = event.title,
+                    avatarUrl = event.avatarUrl,
+                    updatedAt = Instant.now().toString()
+                )
+            }
             is SocketEvent.GroupDisbanded -> conversationDao.deleteConversation(event.conversationId)
-            is SocketEvent.GroupMemberAdded -> syncConversationMembers(event.conversationId)
-            is SocketEvent.GroupMemberRemoved -> syncConversationMembers(event.conversationId)
-            is SocketEvent.GroupRoleChanged -> syncConversationMembers(event.conversationId)
-            is SocketEvent.GroupYouAdded -> syncConversationMembers(event.conversationId)
+            is SocketEvent.GroupMemberAdded -> syncConversationMembersOrList(event.conversationId)
+            is SocketEvent.GroupMemberRemoved -> {
+                syncConversationListFromServer()
+                syncConversationMembersOrList(event.conversationId)
+            }
+            is SocketEvent.GroupRoleChanged -> syncConversationMembersOrList(event.conversationId)
+            is SocketEvent.GroupYouAdded -> {
+                syncConversationListFromServer()
+                syncConversationMembersOrList(event.conversationId)
+            }
             else -> Unit
+        }
+    }
+
+    private suspend fun syncConversationMembersOrList(conversationId: String) {
+        if (!conversationDao.exists(conversationId)) {
+            syncConversationListFromServer()
+        }
+        if (conversationDao.exists(conversationId)) {
+            syncConversationMembers(conversationId)
         }
     }
 
@@ -306,15 +332,28 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun syncConversationListFromServer() {
+        when (val result = safeApiCall { conversationApi.getConversations() }) {
+            is NetworkResult.Success -> {
+                val conversations = result.data.data
+                conversationDao.replaceAll(
+                    conversations = conversations.map { it.toEntity() },
+                    participantPreviews = conversations.flatMap { it.toParticipantPreviewEntities() }
+                )
+            }
+            is NetworkResult.Error -> Unit
+        }
+    }
+
     private suspend fun sendOptimisticMessage(
         conversationId: String,
         content: String,
         type: String,
-        attachments: List<String>
+        attachments: List<String>,
+        clientTempId: String = UUID.randomUUID().toString()
     ): Result<Unit> {
         val senderId = secureStorage.getUserId()
             ?: return Result.failure(IllegalStateException("Current user is missing"))
-        val clientTempId = UUID.randomUUID().toString()
         val graph = optimisticMessageGraph(
             conversationId = conversationId,
             senderId = senderId,
@@ -390,6 +429,9 @@ class ChatRepositoryImpl @Inject constructor(
 
     private suspend fun handleReceiveMessage(event: SocketEvent.ReceiveMessage) {
         val payload = event.payload
+        if (!conversationDao.exists(payload.conversationId)) {
+            syncConversationListFromServer()
+        }
         if (!conversationDao.exists(payload.conversationId)) return
         val graph = payload.toEntityGraph()
         messageDao.upsertMessageGraphs(

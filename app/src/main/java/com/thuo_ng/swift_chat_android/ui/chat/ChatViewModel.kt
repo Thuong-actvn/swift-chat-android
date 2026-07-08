@@ -5,10 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
+import com.thuo_ng.swift_chat_android.domain.model.Conversation
+import com.thuo_ng.swift_chat_android.domain.model.DisplayInfo
 import com.thuo_ng.swift_chat_android.domain.model.Message
+import com.thuo_ng.swift_chat_android.domain.model.SendStatus
 import com.thuo_ng.swift_chat_android.domain.repository.ChatRepository
+import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -24,6 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val conversationRepository: ConversationRepository,
     private val secureStorage: SecureStorage,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
@@ -42,10 +49,18 @@ class ChatViewModel @Inject constructor(
     private var activeConversationId: String? = null
     private var lastMarkedReadMessageId: String? = null
     private var lastTypingEmitAt: Long = 0L
+    private var latestPersistedMessages: List<Message> = emptyList()
+    private var pendingUiMessages: List<Message> = emptyList()
+    private var pendingDirectPartnerId: String? = null
 
     fun handleIntent(intent: ChatIntent) {
         when (intent) {
             is ChatIntent.Start -> start(intent.conversationId)
+            is ChatIntent.StartPendingDirect -> startPendingDirect(
+                partnerId = intent.partnerId,
+                displayName = intent.displayName,
+                avatarUrl = intent.avatarUrl
+            )
             is ChatIntent.InputChanged -> handleInputChanged(intent.value)
             is ChatIntent.InputFocusChanged -> handleFocusChanged(intent.focused)
             ChatIntent.SendClicked -> sendCurrentText()
@@ -59,10 +74,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun start(conversationId: String) {
+    private fun start(conversationId: String, keepPendingUiMessages: Boolean = false) {
         if (activeConversationId == conversationId) return
 
         activeConversationId?.let { chatRepository.leaveRoom(it) }
+        cancelObservers()
+        latestPersistedMessages = emptyList()
+        if (!keepPendingUiMessages) {
+            pendingUiMessages = emptyList()
+            pendingDirectPartnerId = null
+        }
         activeConversationId = conversationId
         lastMarkedReadMessageId = null
         chatRepository.joinRoom(conversationId)
@@ -70,7 +91,9 @@ class ChatViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 conversationId = conversationId,
+                pendingDirect = null,
                 currentAccountId = secureStorage.getUserId(),
+                messages = mergedMessages(),
                 isInitialSyncing = true,
                 hasMoreOlderMessages = true,
                 errorMessage = null
@@ -87,7 +110,8 @@ class ChatViewModel @Inject constructor(
         messagesJob?.cancel()
         messagesJob = viewModelScope.launch {
             chatRepository.observeMessages(conversationId).collect { messages ->
-                _uiState.update { it.copy(messages = messages) }
+                latestPersistedMessages = messages
+                publishMessages()
                 markLatestIncomingMessageRead(messages)
             }
         }
@@ -127,6 +151,60 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private fun startPendingDirect(
+        partnerId: String,
+        displayName: String,
+        avatarUrl: String?
+    ) {
+        if (pendingDirectPartnerId == partnerId && activeConversationId != null) return
+        if (_uiState.value.pendingDirect?.partnerId == partnerId && activeConversationId == null) return
+
+        activeConversationId?.let { chatRepository.leaveRoom(it) }
+        activeConversationId = null
+        pendingDirectPartnerId = partnerId
+        lastMarkedReadMessageId = null
+        cancelObservers()
+
+        latestPersistedMessages = emptyList()
+        pendingUiMessages = emptyList()
+
+        val now = Instant.now().toString()
+        _uiState.update {
+            it.copy(
+                conversationId = "",
+                pendingDirect = PendingDirectChatInfo(
+                    partnerId = partnerId,
+                    displayName = displayName,
+                    avatarUrl = avatarUrl
+                ),
+                conversation = Conversation(
+                    id = "",
+                    type = "direct",
+                    displayInfo = DisplayInfo(
+                        title = displayName,
+                        avatarUrl = avatarUrl,
+                        isOnline = null
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                    unreadCount = 0,
+                    currentParticipant = null,
+                    participantPreview = emptyList(),
+                    totalParticipants = 2,
+                    lastMessage = null
+                ),
+                messages = emptyList(),
+                readReceipts = emptyList(),
+                typingUsers = emptyList(),
+                currentAccountId = secureStorage.getUserId(),
+                isInitialSyncing = false,
+                isLoadingOlder = false,
+                hasMoreOlderMessages = false,
+                errorMessage = null
+            )
+        }
+    }
+
     private fun handleInputChanged(value: String) {
         _uiState.update { it.copy(inputText = value) }
         val conversationId = activeConversationId ?: return
@@ -148,25 +226,181 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun sendCurrentText() {
-        val conversationId = activeConversationId ?: return
         val text = _uiState.value.inputText
-        if (text.isBlank()) return
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+
+        val clientTempId = UUID.randomUUID().toString()
+        val shouldBridgePendingDirect = activeConversationId == null && _uiState.value.pendingDirect != null
+        if (shouldBridgePendingDirect) {
+            appendPendingUiMessage(createPendingTextMessage(clientTempId, trimmed))
+        }
 
         _uiState.update { it.copy(inputText = "") }
-        stopTyping(conversationId)
 
         viewModelScope.launch {
-            chatRepository.sendTextMessage(conversationId, text)
-                .onFailure { error -> _effect.send(ChatEffect.ShowMessage(error.message ?: "Could not send message")) }
+            val conversationId = ensureConversationForSend(
+                activateConversation = !shouldBridgePendingDirect,
+                keepPendingUiMessages = shouldBridgePendingDirect
+            ) ?: run {
+                if (shouldBridgePendingDirect) {
+                    removePendingUiMessage(clientTempId)
+                }
+                _uiState.update { it.copy(inputText = text) }
+                return@launch
+            }
+            if (shouldBridgePendingDirect) {
+                updatePendingUiMessageConversation(clientTempId, conversationId)
+            }
+            stopTyping(conversationId)
+            chatRepository.sendTextMessage(conversationId, text, clientTempId)
+                .onSuccess {
+                    if (shouldBridgePendingDirect) {
+                        start(conversationId, keepPendingUiMessages = true)
+                        delay(NEW_DIRECT_SYNC_DELAY_MS)
+                    }
+                    conversationRepository.syncConversations()
+                }
+                .onFailure { error ->
+                    if (shouldBridgePendingDirect && latestPersistedMessages.none { it.clientTempId == clientTempId }) {
+                        markPendingUiMessageFailed(clientTempId)
+                    }
+                    if (shouldBridgePendingDirect) {
+                        start(conversationId, keepPendingUiMessages = true)
+                    }
+                    _effect.send(ChatEffect.ShowMessage(error.message ?: "Could not send message"))
+                }
         }
     }
 
     private fun sendAttachment(uri: android.net.Uri, type: String) {
-        val conversationId = activeConversationId ?: return
         viewModelScope.launch {
+            val wasPendingDirect = activeConversationId == null && _uiState.value.pendingDirect != null
+            val conversationId = ensureConversationForSend() ?: return@launch
             chatRepository.sendAttachmentMessage(conversationId, uri, type, appContext)
+                .onSuccess {
+                    if (wasPendingDirect) {
+                        delay(NEW_DIRECT_SYNC_DELAY_MS)
+                    }
+                    conversationRepository.syncConversations()
+                }
                 .onFailure { error -> _effect.send(ChatEffect.ShowMessage(error.message ?: "Could not send attachment")) }
         }
+    }
+
+    private suspend fun ensureConversationForSend(
+        activateConversation: Boolean = true,
+        keepPendingUiMessages: Boolean = false
+    ): String? {
+        activeConversationId?.let { return it }
+        val pending = _uiState.value.pendingDirect ?: return null
+
+        _uiState.update { it.copy(isInitialSyncing = true, errorMessage = null) }
+        return when (val result = conversationRepository.openOrCreateDirectConversation(pending.partnerId)) {
+            is NetworkResult.Success -> {
+                _uiState.update {
+                    it.copy(
+                        pendingDirect = null,
+                        isInitialSyncing = false,
+                        errorMessage = null
+                    )
+                }
+                if (activateConversation) {
+                    start(result.data.id, keepPendingUiMessages = keepPendingUiMessages)
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            conversationId = result.data.id,
+                            conversation = result.data,
+                            messages = mergedMessages(),
+                            isInitialSyncing = true,
+                            errorMessage = null
+                        )
+                    }
+                }
+                result.data.id
+            }
+            is NetworkResult.Error -> {
+                _uiState.update {
+                    it.copy(isInitialSyncing = false, errorMessage = result.message)
+                }
+                _effect.send(ChatEffect.ShowMessage(result.message))
+                null
+            }
+        }
+    }
+
+    private fun createPendingTextMessage(clientTempId: String, content: String): Message {
+        val now = Instant.now().toString()
+        return Message(
+            localId = clientTempId,
+            serverId = null,
+            clientTempId = clientTempId,
+            conversationId = activeConversationId.orEmpty(),
+            senderId = secureStorage.getUserId().orEmpty(),
+            sender = null,
+            content = content,
+            type = "text",
+            createdAt = now,
+            updatedAt = null,
+            isUnsent = false,
+            isEdited = false,
+            isDeleted = false,
+            isPinned = false,
+            pinnedBy = null,
+            pinnedAt = null,
+            replyTo = null,
+            forwardedFrom = null,
+            reactions = emptyList(),
+            attachments = emptyList(),
+            sendStatus = SendStatus.SENDING
+        )
+    }
+
+    private fun appendPendingUiMessage(message: Message) {
+        pendingUiMessages = pendingUiMessages + message
+        publishMessages()
+    }
+
+    private fun updatePendingUiMessageConversation(clientTempId: String, conversationId: String) {
+        pendingUiMessages = pendingUiMessages.map { message ->
+            if (message.clientTempId == clientTempId) {
+                message.copy(conversationId = conversationId)
+            } else {
+                message
+            }
+        }
+        publishMessages()
+    }
+
+    private fun markPendingUiMessageFailed(clientTempId: String) {
+        pendingUiMessages = pendingUiMessages.map { message ->
+            if (message.clientTempId == clientTempId) {
+                message.copy(sendStatus = SendStatus.FAILED)
+            } else {
+                message
+            }
+        }
+        publishMessages()
+    }
+
+    private fun removePendingUiMessage(clientTempId: String) {
+        pendingUiMessages = pendingUiMessages.filterNot { it.clientTempId == clientTempId }
+        publishMessages()
+    }
+
+    private fun publishMessages() {
+        val persistedClientTempIds = latestPersistedMessages.mapNotNull { it.clientTempId }.toSet()
+        if (persistedClientTempIds.isNotEmpty()) {
+            pendingUiMessages = pendingUiMessages.filterNot { it.clientTempId in persistedClientTempIds }
+        }
+        _uiState.update { it.copy(messages = mergedMessages()) }
+    }
+
+    private fun mergedMessages(): List<Message> {
+        return (latestPersistedMessages + pendingUiMessages)
+            .distinctBy { it.clientTempId ?: it.localId }
+            .sortedBy { it.createdAt }
     }
 
     private fun loadOlder() {
@@ -269,13 +503,26 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         activeConversationId?.let { chatRepository.leaveRoom(it) }
+        cancelObservers()
         typingStopJob?.cancel()
         super.onCleared()
+    }
+
+    private fun cancelObservers() {
+        conversationJob?.cancel()
+        conversationJob = null
+        messagesJob?.cancel()
+        messagesJob = null
+        readReceiptsJob?.cancel()
+        readReceiptsJob = null
+        typingUsersJob?.cancel()
+        typingUsersJob = null
     }
 
     private companion object {
         const val TYPING_THROTTLE_MS = 2_500L
         const val TYPING_IDLE_STOP_MS = 1_500L
+        const val NEW_DIRECT_SYNC_DELAY_MS = 1_000L
         const val MESSAGE_PAGE_SIZE = 50
     }
 }

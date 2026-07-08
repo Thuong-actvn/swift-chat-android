@@ -13,6 +13,11 @@ import kotlinx.serialization.Serializable
 // ── Main (tab) routes ────────────────────────────────────
 @Serializable object Conversations
 @Serializable data class ChatDetail(val conversationId: String)
+@Serializable data class PendingDirectChat(
+    val partnerId: String,
+    val displayName: String,
+    val avatarUrl: String? = null
+)
 
 @Serializable object Friends
 @Serializable object Notifications
