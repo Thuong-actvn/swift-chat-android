@@ -82,6 +82,7 @@ import java.util.Locale
 @Composable
 fun NotificationScreen(
     onOpenConversation: (String) -> Unit = {},
+    onNavigateToFriendsReceived: () -> Unit = {},
     viewModel: NotificationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -92,6 +93,7 @@ fun NotificationScreen(
             when (effect) {
                 is NotificationEffect.ShowMessage -> snackbarHostState.showSnackbar(effect.message)
                 is NotificationEffect.OpenConversation -> onOpenConversation(effect.conversationId)
+                NotificationEffect.OpenFriendsReceived -> onNavigateToFriendsReceived()
             }
         }
     }
@@ -263,18 +265,6 @@ private fun NotificationItem(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                         )
-                    }
-                }
-
-                if (notification.type.isFriendRequestReceivedType()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = {}, enabled = false) {
-                            Text("Accept")
-                        }
-                        OutlinedButton(onClick = {}, enabled = false) {
-                            Text("Decline")
-                        }
                     }
                 }
             }

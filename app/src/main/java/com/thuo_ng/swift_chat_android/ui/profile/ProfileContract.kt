@@ -5,7 +5,10 @@ import com.thuo_ng.swift_chat_android.domain.model.User
 // State
 data class ProfileUiState(
     val user: User? = null,
-    val isLoading: Boolean = true
+    val isLoading: Boolean = true,
+    val friendCount: Int = 0,
+    val groupCount: Int = 0,
+    val mediaCount: Int = 0
 )
 
 // Intent

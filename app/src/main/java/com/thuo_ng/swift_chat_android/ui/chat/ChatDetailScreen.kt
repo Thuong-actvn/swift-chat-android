@@ -128,6 +128,7 @@ fun ChatDetailScreen(
     pendingAvatarUrl: String? = null,
     onBack: () -> Unit,
     onOpenConversationInfo: (String) -> Unit = {},
+    onNavigateToUserProfile: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -160,6 +161,7 @@ fun ChatDetailScreen(
         snackbarHostState = snackbarHostState,
         onBack = onBack,
         onOpenConversationInfo = onOpenConversationInfo,
+        onNavigateToUserProfile = onNavigateToUserProfile,
         onInputChanged = { viewModel.handleIntent(ChatIntent.InputChanged(it)) },
         onInputFocusChanged = { viewModel.handleIntent(ChatIntent.InputFocusChanged(it)) },
         onSendClick = { viewModel.handleIntent(ChatIntent.SendClicked) },
@@ -182,6 +184,7 @@ private fun ChatDetailContent(
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onOpenConversationInfo: (String) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     onInputChanged: (String) -> Unit,
     onInputFocusChanged: (Boolean) -> Unit,
     onSendClick: () -> Unit,
@@ -237,7 +240,8 @@ private fun ChatDetailContent(
         ChatTopBar(
             state = state,
             onBack = onBack,
-            onOpenConversationInfo = onOpenConversationInfo
+            onOpenConversationInfo = onOpenConversationInfo,
+            onNavigateToUserProfile = onNavigateToUserProfile
         )
 
         Box(modifier = Modifier.weight(1f)) {
@@ -250,6 +254,7 @@ private fun ChatDetailContent(
                 onDeleteForMe = onDeleteForMe,
                 onReact = onReact,
                 onTogglePin = onTogglePin,
+                onNavigateToUserProfile = onNavigateToUserProfile,
                 modifier = Modifier.fillMaxWidth(),
                 bottomContentPadding = 12.dp
             )
@@ -278,9 +283,13 @@ private fun ChatDetailContent(
 private fun ChatTopBar(
     state: ChatUiState,
     onBack: () -> Unit,
-    onOpenConversationInfo: (String) -> Unit
+    onOpenConversationInfo: (String) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit
 ) {
     val conversation = state.conversation
+    val partnerId = state.pendingDirect?.partnerId
+        ?: conversation?.participantPreview?.find { it.accountId != state.currentAccountId }?.accountId
+
     val typingText = state.typingUsers.firstOrNull()?.displayName?.let { "$it is typing..." }
         ?: state.typingUsers.firstOrNull()?.let { "typing..." }
     val subtitle = typingText ?: when {
@@ -312,10 +321,21 @@ private fun ChatTopBar(
                     avatarUrl = conversation?.displayInfo?.avatarUrl,
                     size = 40.dp,
                     showOnlineDot = conversation?.type.equals("direct", ignoreCase = true),
-                    isOnline = conversation?.displayInfo?.isOnline == true
+                    isOnline = conversation?.displayInfo?.isOnline == true,
+                    modifier = Modifier.clickable(
+                        enabled = partnerId != null && !conversation?.type.equals("group", true),
+                        onClick = { partnerId?.let(onNavigateToUserProfile) }
+                    )
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(
+                            enabled = partnerId != null && !conversation?.type.equals("group", true),
+                            onClick = { partnerId?.let(onNavigateToUserProfile) }
+                        )
+                ) {
                     Text(
                         text = conversation?.displayInfo?.title ?: "Conversation",
                         style = MaterialTheme.typography.titleLarge,
@@ -366,6 +386,7 @@ private fun MessageList(
     onDeleteForMe: (Message) -> Unit,
     onReact: (Message, String) -> Unit,
     onTogglePin: (Message) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     bottomContentPadding: androidx.compose.ui.unit.Dp = 28.dp,
     modifier: Modifier = Modifier
 ) {
@@ -418,7 +439,8 @@ private fun MessageList(
                             onUnsend = { onUnsendMessage(row.message) },
                             onDeleteForMe = { onDeleteForMe(row.message) },
                             onReact = { emoji -> onReact(row.message, emoji) },
-                            onTogglePin = { onTogglePin(row.message) }
+                            onTogglePin = { onTogglePin(row.message) },
+                            onAvatarClick = { onNavigateToUserProfile(row.message.senderId) }
                         )
                     }
                 }
@@ -470,7 +492,8 @@ private fun MessageBubble(
     onUnsend: () -> Unit,
     onDeleteForMe: () -> Unit,
     onReact: (String) -> Unit,
-    onTogglePin: () -> Unit
+    onTogglePin: () -> Unit,
+    onAvatarClick: () -> Unit = {}
 ) {
     val colors = LocalChatColor.current
     val bubbleColor = if (isOwn) Color(0xFF0076A2) else colors.bubbleReceived
@@ -493,7 +516,9 @@ private fun MessageBubble(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
+                modifier = Modifier
+                    .padding(start = 40.dp, bottom = 4.dp)
+                    .clickable(onClick = onAvatarClick)
             )
         }
 
@@ -504,7 +529,11 @@ private fun MessageBubble(
         ) {
             if (!isOwn) {
                 if (showAvatar) {
-                    UserAvatar(avatarUrl = senderAvatar, size = 32.dp)
+                    UserAvatar(
+                        avatarUrl = senderAvatar,
+                        size = 32.dp,
+                        modifier = Modifier.clickable(onClick = onAvatarClick)
+                    )
                 } else {
                     Spacer(modifier = Modifier.width(28.dp))
                 }
@@ -1467,7 +1496,8 @@ private fun ChatDetailPreview() {
             onUnsendMessage = {},
             onDeleteForMe = {},
             onReact = { _, _ -> },
-            onTogglePin = {}
+            onTogglePin = {},
+            onNavigateToUserProfile = {}
         )
     }
 }

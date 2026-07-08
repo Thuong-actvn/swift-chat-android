@@ -1,5 +1,6 @@
 package com.thuo_ng.swift_chat_android.ui.friends
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
@@ -30,6 +31,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FriendsViewModel @Inject constructor(
+    private val savedStateHandle: SavedStateHandle,
     private val friendRepository: FriendRepository,
     private val conversationRepository: ConversationRepository,
     private val userRepository: UserRepository,
@@ -58,6 +60,19 @@ class FriendsViewModel @Inject constructor(
     private var refreshJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            savedStateHandle.getStateFlow<String?>("initialSection", null).collect { sectionName ->
+                sectionName?.let { name ->
+                    val section = when (name) {
+                        "Received" -> FriendsSection.Received
+                        "Sent" -> FriendsSection.Sent
+                        "Blocked" -> FriendsSection.Blocked
+                        else -> FriendsSection.Friends
+                    }
+                    _uiState.update { it.copy(selectedSection = section) }
+                }
+            }
+        }
         initialize()
         observeSocketEvents()
     }

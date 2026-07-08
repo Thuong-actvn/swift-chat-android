@@ -3,6 +3,8 @@ package com.thuo_ng.swift_chat_android.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
+import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
+import com.thuo_ng.swift_chat_android.domain.repository.FriendRepository
 import com.thuo_ng.swift_chat_android.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,7 +21,9 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val friendRepository: FriendRepository,
+    private val conversationRepository: ConversationRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -28,23 +33,44 @@ class ProfileViewModel @Inject constructor(
     val effect: Flow<ProfileEffect> = _effect.receiveAsFlow()
 
     init {
-        observeUser()
+        observeUserAndStats()
     }
 
-    private fun observeUser() {
+    private fun observeUserAndStats() {
         viewModelScope.launch {
-            // Lắng nghe dữ liệu trong Room Database
+            // Lắng nghe dữ liệu user và thống kê
             launch {
-                userRepository.observeCurrentUser().collect { user ->
-                    _uiState.update { it.copy(user = user, isLoading = user == null) }
+                combine(
+                    userRepository.observeCurrentUser(),
+                    conversationRepository.observeConversations()
+                ) { user, conversations ->
+                    val groupsCount = conversations.count { it.type.equals("group", ignoreCase = true) }
+                    Triple(user, groupsCount, 0) // mediaCount placeholder = 0
+                }.collect { (user, groupsCount, mediaCount) ->
+                    _uiState.update { 
+                        it.copy(
+                            user = user, 
+                            isLoading = user == null,
+                            groupCount = groupsCount,
+                            mediaCount = mediaCount
+                        ) 
+                    }
                 }
             }
             
-            // Fetch dữ liệu mới từ Server để đồng bộ xuống Room
-            try {
-                userRepository.syncCurrentUser()
-            } catch (e: Exception) {
-                e.printStackTrace()
+            // Fetch friend count and sync user
+            launch {
+                try {
+                    userRepository.syncCurrentUser()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                
+                val friendsResult = friendRepository.getFriends(limit = 1, offset = 0)
+                if (friendsResult is com.thuo_ng.swift_chat_android.core.network.NetworkResult.Success) {
+                    _uiState.update { it.copy(friendCount = friendsResult.data.total) }
+                }
+
                 if (_uiState.value.user == null) {
                     _uiState.update { it.copy(isLoading = false) }
                 }

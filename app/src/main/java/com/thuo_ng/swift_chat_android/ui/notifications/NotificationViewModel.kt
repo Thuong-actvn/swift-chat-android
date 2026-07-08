@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
 import com.thuo_ng.swift_chat_android.domain.model.Notification
+import com.thuo_ng.swift_chat_android.domain.model.isFriendRequestReceivedType
+import com.thuo_ng.swift_chat_android.domain.model.isNewMessageType
 import com.thuo_ng.swift_chat_android.domain.repository.NotificationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +21,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import javax.inject.Inject
 
 @HiltViewModel
 class NotificationViewModel @Inject constructor(
@@ -34,12 +36,12 @@ class NotificationViewModel @Inject constructor(
     init {
         observeNotifications()
         observeUnreadCount()
-        refreshNotifications(isRefresh = false)
+        refreshNotifications(false)
     }
 
     fun handleIntent(intent: NotificationIntent) {
         when (intent) {
-            NotificationIntent.Refresh -> refreshNotifications(isRefresh = true)
+            NotificationIntent.Refresh -> refreshNotifications(true)
             NotificationIntent.MarkAllAsRead -> markAllAsRead()
             is NotificationIntent.NotificationClicked -> onNotificationClicked(intent.notification)
         }
@@ -47,13 +49,11 @@ class NotificationViewModel @Inject constructor(
 
     private fun observeNotifications() {
         viewModelScope.launch {
-            notificationRepository.observeNotifications().collect { notifications ->
-                _uiState.update { current ->
-                    current.copy(
-                        notifications = notifications,
-                        sections = groupNotifications(notifications),
-                        isLoading = if (notifications.isNotEmpty()) false else current.isLoading,
-                        errorMessage = null
+            notificationRepository.observeNotifications().collect { list ->
+                _uiState.update { 
+                    it.copy(
+                        notifications = list,
+                        sections = groupNotifications(list)
                     )
                 }
             }
@@ -62,52 +62,31 @@ class NotificationViewModel @Inject constructor(
 
     private fun observeUnreadCount() {
         viewModelScope.launch {
-            notificationRepository.observeUnreadCount().collect { unreadCount ->
-                _uiState.update { it.copy(unreadCount = unreadCount) }
+            notificationRepository.observeUnreadCount().collect { count ->
+                _uiState.update { it.copy(unreadCount = count) }
             }
         }
     }
 
-    private fun refreshNotifications(isRefresh: Boolean) {
-        if (isRefresh && _uiState.value.isRefreshing) return
-
+    private fun refreshNotifications(isManual: Boolean) {
         viewModelScope.launch {
-            val shouldShowInitialLoading = !isRefresh && _uiState.value.notifications.isEmpty()
-            _uiState.update {
+            if (isManual) _uiState.update { it.copy(isRefreshing = true) }
+            else _uiState.update { it.copy(isLoading = true) }
+
+            val result = notificationRepository.syncNotifications()
+            if (result is NetworkResult.Error) {
+                _uiState.update { it.copy(errorMessage = result.message) }
+                _effect.send(NotificationEffect.ShowMessage(result.message))
+            } else {
+                _uiState.update { it.copy(errorMessage = null) }
+                notificationRepository.syncUnreadCount()
+            }
+
+            _uiState.update { 
                 it.copy(
-                    isLoading = shouldShowInitialLoading,
-                    isRefreshing = isRefresh,
-                    errorMessage = null
+                    isLoading = false,
+                    isRefreshing = false
                 )
-            }
-
-            when (val result = notificationRepository.syncNotifications()) {
-                is NetworkResult.Success -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            errorMessage = null
-                        )
-                    }
-                }
-                is NetworkResult.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isRefreshing = false,
-                            errorMessage = result.message
-                        )
-                    }
-                    _effect.send(NotificationEffect.ShowMessage(result.message))
-                }
-            }
-
-            when (val unreadResult = notificationRepository.syncUnreadCount()) {
-                is NetworkResult.Success -> _uiState.update {
-                    it.copy(unreadCount = unreadResult.data)
-                }
-                is NetworkResult.Error -> Unit
             }
         }
     }
@@ -115,12 +94,11 @@ class NotificationViewModel @Inject constructor(
     private fun markAllAsRead() {
         viewModelScope.launch {
             val result = notificationRepository.markAllAsRead()
-            if (result.isSuccess) {
-                _uiState.update { it.copy(unreadCount = 0) }
-                _effect.send(NotificationEffect.ShowMessage("All notifications marked as read"))
-            } else {
-                val message = result.exceptionOrNull()?.message ?: "Could not mark notifications as read"
+            if (result.isFailure) {
+                val message = result.exceptionOrNull()?.message ?: "Could not mark all as read"
                 _effect.send(NotificationEffect.ShowMessage(message))
+            } else {
+                notificationRepository.syncUnreadCount()
             }
         }
     }
@@ -135,42 +113,39 @@ class NotificationViewModel @Inject constructor(
                 }
             }
 
-            if (notification.type == "new_message" && notification.referenceId != null) {
+            val type = notification.type
+            if (type.isNewMessageType() && notification.referenceId != null) {
                 _effect.send(NotificationEffect.OpenConversation(notification.referenceId))
+            } else if (type.isFriendRequestReceivedType()) {
+                _effect.send(NotificationEffect.OpenFriendsReceived)
             }
         }
     }
 
-    private fun groupNotifications(notifications: List<Notification>): List<NotificationSection> {
-        val zoneId = ZoneId.systemDefault()
-        val today = java.time.LocalDate.now(zoneId)
-        val yesterday = today.minusDays(1)
+    private fun groupNotifications(list: List<Notification>): List<NotificationSection> {
+        val now = Instant.now()
+        val today = list.filter { 
+            parseInstant(it.createdAt).atZone(ZoneId.systemDefault()).toLocalDate() == 
+                now.atZone(ZoneId.systemDefault()).toLocalDate() 
+        }
+        val earlier = list.filter { 
+            parseInstant(it.createdAt).atZone(ZoneId.systemDefault()).toLocalDate() != 
+                now.atZone(ZoneId.systemDefault()).toLocalDate() 
+        }
 
-        return notifications
-            .sortedByDescending { parseInstant(it.createdAt) }
-            .groupBy { notification ->
-                val notificationDate = Instant.ofEpochMilli(parseInstant(notification.createdAt).toEpochMilli())
-                    .atZone(zoneId)
-                    .toLocalDate()
-                when (notificationDate) {
-                    today -> "Today"
-                    yesterday -> "Yesterday"
-                    else -> notificationDate.format(
-                        DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
-                    )
-                }
-            }
-            .map { (label, items) ->
-                NotificationSection(label = label, items = items)
-            }
+        val sections = mutableListOf<NotificationSection>()
+        if (today.isNotEmpty()) sections.add(NotificationSection("Today", today))
+        if (earlier.isNotEmpty()) sections.add(NotificationSection("Earlier", earlier))
+        
+        return sections
     }
 
-    private fun parseInstant(createdAt: String): Instant {
-        return runCatching { Instant.parse(createdAt) }
-            .getOrElse {
-                runCatching { java.time.OffsetDateTime.parse(createdAt).toInstant() }
-                    .getOrElse { Instant.EPOCH }
-            }
+    private fun parseInstant(dateStr: String): Instant {
+        return try {
+            Instant.parse(dateStr)
+        } catch (e: Exception) {
+            Instant.now()
+        }
     }
 }
 
@@ -178,7 +153,7 @@ data class NotificationUiState(
     val notifications: List<Notification> = emptyList(),
     val sections: List<NotificationSection> = emptyList(),
     val unreadCount: Int = 0,
-    val isLoading: Boolean = true,
+    val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null
 )
@@ -197,4 +172,5 @@ sealed interface NotificationIntent {
 sealed interface NotificationEffect {
     data class ShowMessage(val message: String) : NotificationEffect
     data class OpenConversation(val conversationId: String) : NotificationEffect
+    data object OpenFriendsReceived : NotificationEffect
 }

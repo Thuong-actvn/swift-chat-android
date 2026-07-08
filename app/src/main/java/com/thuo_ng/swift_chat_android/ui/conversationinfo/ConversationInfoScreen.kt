@@ -96,6 +96,7 @@ fun ConversationInfoScreen(
     conversationId: String,
     onBack: () -> Unit,
     onConversationClosed: () -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     viewModel: ConversationInfoViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -137,7 +138,8 @@ fun ConversationInfoScreen(
         onDeleteConversation = { viewModel.handleIntent(ConversationInfoIntent.DeleteConversation) },
         onLeaveGroup = { viewModel.handleIntent(ConversationInfoIntent.LeaveGroup) },
         onKickMember = { viewModel.handleIntent(ConversationInfoIntent.KickMember(it.accountId)) },
-        onTransferLeadership = { viewModel.handleIntent(ConversationInfoIntent.TransferLeadership(it.accountId)) }
+        onTransferLeadership = { viewModel.handleIntent(ConversationInfoIntent.TransferLeadership(it.accountId)) },
+        onNavigateToUserProfile = onNavigateToUserProfile
     )
 
     pendingConfirm?.let { confirm ->
@@ -192,6 +194,7 @@ private fun ConversationInfoContent(
     onLeaveGroup: () -> Unit,
     onKickMember: (ConversationMember) -> Unit,
     onTransferLeadership: (ConversationMember) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -219,7 +222,8 @@ private fun ConversationInfoContent(
                     item {
                         ConversationInfoHeader(
                             state = state,
-                            onBack = onBack
+                            onBack = onBack,
+                            onNavigateToUserProfile = onNavigateToUserProfile
                         )
                     }
                     item {
@@ -254,6 +258,7 @@ private fun ConversationInfoContent(
                                 onConfirmAction = onConfirmAction,
                                 onKickMember = onKickMember,
                                 onTransferLeadership = onTransferLeadership,
+                                onNavigateToUserProfile = onNavigateToUserProfile,
                                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 24.dp)
                             )
                         }
@@ -303,7 +308,8 @@ private fun ConversationInfoContent(
             onChangeRole = onChangeRole,
             onConfirmAction = onConfirmAction,
             onKickMember = onKickMember,
-            onTransferLeadership = onTransferLeadership
+            onTransferLeadership = onTransferLeadership,
+            onNavigateToUserProfile = onNavigateToUserProfile
         )
     }
 }
@@ -312,9 +318,14 @@ private fun ConversationInfoContent(
 private fun ConversationInfoHeader(
     state: ConversationInfoUiState,
     onBack: () -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val conversation = state.conversation
+    val partnerId = if (state.isDirect) {
+        conversation?.participantPreview?.find { it.accountId != state.currentAccountId }?.accountId
+    } else null
+
     val heroImageUrl = state.mediaPreviews.firstOrNull()?.url ?: conversation?.displayInfo?.avatarUrl
     val subtitle = buildString {
         if (state.isGroup) {
@@ -355,6 +366,11 @@ private fun ConversationInfoHeader(
                     .offset(y = 46.dp)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
                     .padding(4.dp)
+                    .then(
+                        if (partnerId != null) {
+                            Modifier.clickable { onNavigateToUserProfile(partnerId) }
+                        } else Modifier
+                    )
             )
         }
 
@@ -370,6 +386,11 @@ private fun ConversationInfoHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 34.dp)
+                .then(
+                    if (partnerId != null) {
+                        Modifier.clickable { onNavigateToUserProfile(partnerId) }
+                    } else Modifier
+                )
         )
         if (subtitle.isNotBlank()) {
             Spacer(modifier = Modifier.height(6.dp))
@@ -805,6 +826,7 @@ private fun ParticipantsSection(
     onConfirmAction: (PendingConfirm) -> Unit,
     onKickMember: (ConversationMember) -> Unit,
     onTransferLeadership: (ConversationMember) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -848,7 +870,8 @@ private fun ParticipantsSection(
                     onChangeRole = onChangeRole,
                     onConfirmAction = onConfirmAction,
                     onKickMember = onKickMember,
-                    onTransferLeadership = onTransferLeadership
+                    onTransferLeadership = onTransferLeadership,
+                    onNavigateToUserProfile = onNavigateToUserProfile
                 )
             }
         }
@@ -880,6 +903,7 @@ private fun MemberRow(
     onConfirmAction: (PendingConfirm) -> Unit,
     onKickMember: (ConversationMember) -> Unit,
     onTransferLeadership: (ConversationMember) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isMe = member.accountId == currentAccountId
@@ -897,7 +921,8 @@ private fun MemberRow(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 68.dp)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp)
+            .clickable { onNavigateToUserProfile(member.accountId) },
         verticalAlignment = Alignment.CenterVertically
     ) {
         UserAvatar(
@@ -1349,7 +1374,8 @@ private fun AllMembersSheet(
     onChangeRole: (ConversationMember, String) -> Unit,
     onConfirmAction: (PendingConfirm) -> Unit,
     onKickMember: (ConversationMember) -> Unit,
-    onTransferLeadership: (ConversationMember) -> Unit
+    onTransferLeadership: (ConversationMember) -> Unit,
+    onNavigateToUserProfile: (String) -> Unit
 ) {
     val members = remember(state.members, state.allMembersSearchQuery) {
         state.members.filteredBy(state.allMembersSearchQuery)
@@ -1391,7 +1417,8 @@ private fun AllMembersSheet(
                         onChangeRole = onChangeRole,
                         onConfirmAction = onConfirmAction,
                         onKickMember = onKickMember,
-                        onTransferLeadership = onTransferLeadership
+                        onTransferLeadership = onTransferLeadership,
+                        onNavigateToUserProfile = onNavigateToUserProfile
                     )
                     HorizontalDivider(color = NeutralVariant80.copy(alpha = 0.35f))
                 }

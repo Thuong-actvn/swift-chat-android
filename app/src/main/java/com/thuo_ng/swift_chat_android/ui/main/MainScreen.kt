@@ -23,6 +23,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
@@ -56,6 +57,7 @@ import com.thuo_ng.swift_chat_android.ui.navigation.Friends
 import com.thuo_ng.swift_chat_android.ui.navigation.Notifications
 import com.thuo_ng.swift_chat_android.ui.navigation.PendingDirectChat
 import com.thuo_ng.swift_chat_android.ui.navigation.Profile
+import com.thuo_ng.swift_chat_android.ui.navigation.UserProfile
 import com.thuo_ng.swift_chat_android.ui.notifications.NotificationScreen
 import com.thuo_ng.swift_chat_android.ui.notifications.NotificationViewModel
 import com.thuo_ng.swift_chat_android.ui.profile.ProfileScreen
@@ -70,7 +72,7 @@ private data class TabItem(
 
 private val tabs = listOf(
     TabItem("Chats", Icons.AutoMirrored.Outlined.Chat, Icons.AutoMirrored.Filled.Chat, Conversations),
-    TabItem("Friends", Icons.Outlined.Group, Icons.Filled.Group, Friends),
+    TabItem("Friends", Icons.Outlined.Group, Icons.Filled.Group, Friends()),
     TabItem("Notifications", Icons.Outlined.Notifications, Icons.Filled.Notifications, Notifications),
     TabItem("Profile", Icons.Outlined.Person, Icons.Filled.Person, Profile)
 )
@@ -92,6 +94,26 @@ fun MainScreen(
     val showBottomBar = currentDestination == null || tabs.any { tab ->
         currentDestination.hierarchy.any { destination ->
             destination.hasRoute(tab.route::class)
+        }
+    }
+
+    // Handle deep-link navigation requests coming back from UserProfileScreen
+    // via rootNavController's SavedStateHandle.
+    val rootCurrentEntry by rootNavController.currentBackStackEntryAsState()
+    LaunchedEffect(rootCurrentEntry) {
+        val handle = rootCurrentEntry?.savedStateHandle ?: return@LaunchedEffect
+        handle.get<String>("navigate_to_chat")?.let { conversationId ->
+            handle.remove<String>("navigate_to_chat")
+            mainNavController.navigate(ChatDetail(conversationId))
+        }
+        val pendingId = handle.get<String>("navigate_to_pending_chat_id")
+        if (pendingId != null) {
+            val displayName = handle.get<String>("navigate_to_pending_chat_name") ?: pendingId
+            val avatarUrl = handle.get<String>("navigate_to_pending_chat_avatar")
+            handle.remove<String>("navigate_to_pending_chat_id")
+            handle.remove<String>("navigate_to_pending_chat_name")
+            handle.remove<String>("navigate_to_pending_chat_avatar")
+            mainNavController.navigate(PendingDirectChat(pendingId, displayName, avatarUrl))
         }
     }
 
@@ -136,7 +158,7 @@ fun MainScreen(
                                     BadgedBox(
                                         badge = {
                                             val badgeCount = when (tab.route) {
-                                                Friends -> friendsRequestCount
+                                                is Friends -> friendsRequestCount
                                                 Notifications -> notificationUnreadCount
                                                 else -> 0
                                             }
@@ -191,6 +213,9 @@ fun MainScreen(
                     onBack = { mainNavController.popBackStack() },
                     onOpenConversationInfo = { conversationId ->
                         mainNavController.navigate(ConversationInfo(conversationId))
+                    },
+                    onNavigateToUserProfile = { accountId ->
+                        rootNavController.navigate(UserProfile(accountId))
                     }
                 )
             }
@@ -203,6 +228,9 @@ fun MainScreen(
                     onBack = { mainNavController.popBackStack() },
                     onOpenConversationInfo = { conversationId ->
                         mainNavController.navigate(ConversationInfo(conversationId))
+                    },
+                    onNavigateToUserProfile = { accountId ->
+                        rootNavController.navigate(UserProfile(accountId))
                     }
                 )
             }
@@ -216,6 +244,9 @@ fun MainScreen(
                             popUpTo(Conversations) { inclusive = false }
                             launchSingleTop = true
                         }
+                    },
+                    onNavigateToUserProfile = { accountId ->
+                        rootNavController.navigate(UserProfile(accountId))
                     }
                 )
             }
@@ -227,6 +258,9 @@ fun MainScreen(
                     onOpenConversation = { conversationId ->
                         mainNavController.navigate(ChatDetail(conversationId))
                     },
+                    onOpenPublicProfile = { accountId, _ ->
+                        rootNavController.navigate(UserProfile(accountId))
+                    },
                     viewModel = friendsViewModel
                 )
             }
@@ -234,6 +268,15 @@ fun MainScreen(
                 NotificationScreen(
                     onOpenConversation = { conversationId ->
                         mainNavController.navigate(ChatDetail(conversationId))
+                    },
+                    onNavigateToFriendsReceived = {
+                        mainNavController.navigate(Friends(initialSection = "Received")) {
+                            popUpTo(mainNavController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     },
                     viewModel = notificationViewModel
                 )
@@ -251,6 +294,7 @@ fun MainScreen(
 private fun formatBadgeCount(count: Int): String {
     return if (count > 99) "99+" else count.toString()
 }
+
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable

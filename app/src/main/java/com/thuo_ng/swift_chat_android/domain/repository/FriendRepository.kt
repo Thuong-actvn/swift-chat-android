@@ -10,6 +10,7 @@ import com.thuo_ng.swift_chat_android.domain.model.SendFriendRequestResult
 
 interface FriendRepository {
     suspend fun getFriends(limit: Int = 20, offset: Int = 0): NetworkResult<OffsetPage<PublicUserProfile>>
+    suspend fun getPublicProfile(userId: String): NetworkResult<PublicUserProfile>
     suspend fun searchUsers(query: String, scope: String = "all"): NetworkResult<List<SearchUser>>
     suspend fun getFriendRequests(): NetworkResult<List<FriendRequest>>
     suspend fun sendFriendRequest(receiverId: String): NetworkResult<SendFriendRequestResult>

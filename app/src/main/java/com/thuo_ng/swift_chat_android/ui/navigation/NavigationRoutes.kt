@@ -20,9 +20,10 @@ import kotlinx.serialization.Serializable
     val avatarUrl: String? = null
 )
 
-@Serializable object Friends
+@Serializable data class Friends(val initialSection: String? = null)
 @Serializable object Notifications
 @Serializable object Profile
 
 // ── Root routes (Full screen) ────────────────────────────
 @Serializable object EditProfile
+@Serializable data class UserProfile(val userId: String)

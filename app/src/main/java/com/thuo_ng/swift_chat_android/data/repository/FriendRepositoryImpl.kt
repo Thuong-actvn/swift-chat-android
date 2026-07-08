@@ -32,6 +32,13 @@ class FriendRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getPublicProfile(userId: String): NetworkResult<PublicUserProfile> {
+        return when (val result = safeApiCall { userApi.getPublicProfile(userId) }) {
+            is NetworkResult.Success -> NetworkResult.Success(result.data.toDomain())
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
     override suspend fun searchUsers(
         query: String,
         scope: String

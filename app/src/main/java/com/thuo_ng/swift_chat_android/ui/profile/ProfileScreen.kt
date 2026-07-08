@@ -1,7 +1,10 @@
 package com.thuo_ng.swift_chat_android.ui.profile
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -46,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -105,6 +109,9 @@ fun ProfileScreen(
             state.user?.let { user ->
                 ProfileContent(
                     user = user,
+                    friendCount = state.friendCount,
+                    groupCount = state.groupCount,
+                    mediaCount = state.mediaCount,
                     onEditClick = onNavigateToEditProfile,
                     onLogoutClick = { viewModel.handleIntent(ProfileIntent.LogoutClicked) },
                     modifier = Modifier.padding(innerPadding)
@@ -117,12 +124,16 @@ fun ProfileScreen(
 @Composable
 private fun ProfileContent(
     user: User,
+    friendCount: Int,
+    groupCount: Int,
+    mediaCount: Int,
     onEditClick: () -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
     var showAvatarFullScreen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
@@ -242,7 +253,24 @@ private fun ProfileContent(
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable {
+                    user.website?.let { site ->
+                        try {
+                            val url = if (!site.startsWith("http://") && !site.startsWith("https://")) {
+                                "https://$site"
+                            } else {
+                                site
+                            }
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // Handle error
+                        }
+                    }
+                }
+            ) {
                 Icon(
                     imageVector = Icons.Outlined.Link,
                     contentDescription = "Website",
@@ -262,16 +290,28 @@ private fun ProfileContent(
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // 3. Stats (Placeholder)
+        // 3. Stats (Real data)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
                 .padding(horizontal = 16.dp)
         ) {
-            ProfileStatItem(value = "—", label = "Friends", modifier = Modifier.weight(1f))
-            ProfileStatItem(value = "—", label = "Groups", modifier = Modifier.weight(1f))
-            ProfileStatItem(value = "—", label = "Media", modifier = Modifier.weight(1f))
+            ProfileStatItem(
+                value = friendCount.toString(),
+                label = "Friends",
+                modifier = Modifier.weight(1f)
+            )
+            ProfileStatItem(
+                value = groupCount.toString(),
+                label = "Groups",
+                modifier = Modifier.weight(1f)
+            )
+            ProfileStatItem(
+                value = mediaCount.toString(),
+                label = "Media",
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -351,6 +391,9 @@ private fun ProfileContentPreview() {
                     lastSeen = System.currentTimeMillis(),
                     createdAt = System.currentTimeMillis()
                 ),
+                friendCount = 120,
+                groupCount = 15,
+                mediaCount = 45,
                 onEditClick = {},
                 onLogoutClick = {}
             )
