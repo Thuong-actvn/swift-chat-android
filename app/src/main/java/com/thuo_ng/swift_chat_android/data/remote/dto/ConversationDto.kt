@@ -150,8 +150,17 @@ data class ParticipantPreviewDto(
     @SerializedName("displayName") val displayName: String?,
     @SerializedName("avatarUrl") val avatarUrl: String?
 ) {
+    fun resolvedAccountId(): String? =
+        accountId?.takeIf { it.isNotBlank() }
+            ?: id?.takeIf { it.isNotBlank() }
+            ?: userId?.takeIf { it.isNotBlank() }
+
+    fun resolvedUserId(): String? =
+        userId?.takeIf { it.isNotBlank() }
+            ?: id?.takeIf { it.isNotBlank() }
+
     fun toDomain(): ParticipantPreview = ParticipantPreview(
-        accountId = accountId,
+        accountId = resolvedAccountId(),
         handle = handle,
         displayName = displayName ?: handle,
         avatarUrl = avatarUrl

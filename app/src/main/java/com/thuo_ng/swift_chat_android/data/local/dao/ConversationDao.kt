@@ -124,6 +124,33 @@ interface ConversationDao {
 
     @Query(
         """
+        UPDATE conversations SET isOnline = :isOnline
+        WHERE id = :conversationId
+            AND LOWER(type) = 'direct'
+        """
+    )
+    suspend fun updateDirectPresenceByConversationId(
+        conversationId: String,
+        isOnline: Boolean
+    ): Int
+
+    @Query(
+        """
+        UPDATE conversations SET isOnline = :isOnline
+        WHERE LOWER(type) = 'direct'
+            AND id IN (
+                SELECT conversationId FROM conversation_participant_previews
+                WHERE accountId IN (:participantIds) OR userId IN (:participantIds)
+            )
+        """
+    )
+    suspend fun updateDirectPresence(
+        participantIds: List<String>,
+        isOnline: Boolean
+    ): Int
+
+    @Query(
+        """
         UPDATE conversations SET
             lastMessageId = :messageId,
             lastMessageContent = :content,
@@ -132,7 +159,7 @@ interface ConversationDao {
             lastMessageTimestamp = :timestamp,
             lastMessageType = :type,
             updatedAt = :timestamp,
-            unreadCount = unreadCount + :unreadIncrement
+            unreadCount = MAX(0, unreadCount + :unreadIncrement)
         WHERE id = :conversationId
         """
     )
@@ -145,6 +172,24 @@ interface ConversationDao {
         timestamp: String,
         type: String,
         unreadIncrement: Int
+    )
+
+    @Query(
+        """
+        UPDATE conversations SET
+            lastMessageId = NULL,
+            lastMessageContent = NULL,
+            lastMessageSenderId = NULL,
+            lastMessageSenderName = NULL,
+            lastMessageTimestamp = NULL,
+            lastMessageType = NULL,
+            updatedAt = COALESCE(:updatedAt, updatedAt)
+        WHERE id = :conversationId
+        """
+    )
+    suspend fun clearLastMessage(
+        conversationId: String,
+        updatedAt: String?
     )
 
     @Query(

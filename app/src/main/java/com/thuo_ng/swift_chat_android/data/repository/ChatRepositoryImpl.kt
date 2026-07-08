@@ -18,6 +18,7 @@ import com.thuo_ng.swift_chat_android.data.local.dao.ReadReceiptDao
 import com.thuo_ng.swift_chat_android.data.local.entity.ConversationEntity
 import com.thuo_ng.swift_chat_android.data.local.entity.ConversationParticipantPreviewEntity
 import com.thuo_ng.swift_chat_android.data.local.entity.MessageReactionEntity
+import com.thuo_ng.swift_chat_android.data.local.relation.ConversationWithParticipantPreviews
 import com.thuo_ng.swift_chat_android.data.mapper.normalizedAccountId
 import com.thuo_ng.swift_chat_android.data.mapper.optimisticMessageGraph
 import com.thuo_ng.swift_chat_android.data.mapper.toDomain
@@ -28,6 +29,7 @@ import com.thuo_ng.swift_chat_android.data.remote.api.ConversationApi
 import com.thuo_ng.swift_chat_android.data.remote.api.MessageApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationMemberDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.MessageDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.displayMessagePreviewContent
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
 import com.thuo_ng.swift_chat_android.domain.model.Message
 import com.thuo_ng.swift_chat_android.domain.model.ReadReceipt
@@ -175,6 +177,7 @@ class ChatRepositoryImpl @Inject constructor(
 
         return if (socketManager.editMessage(EditMessagePayload(messageId, message.conversationId, trimmed))) {
             messageDao.updateEditedMessage(messageId, trimmed, Instant.now().toString())
+            refreshConversationPreviewFromLatestMessage(message.conversationId)
             Result.success(Unit)
         } else {
             Result.failure(IllegalStateException("Socket is not connected"))
@@ -185,6 +188,7 @@ class ChatRepositoryImpl @Inject constructor(
         val messageId = message.serverId ?: return Result.failure(IllegalStateException("Message is not synced yet"))
         return if (socketManager.unsendMessage(messageId, message.conversationId)) {
             messageDao.markUnsent(messageId, Instant.now().toString())
+            refreshConversationPreviewFromLatestMessage(message.conversationId)
             Result.success(Unit)
         } else {
             Result.failure(IllegalStateException("Socket is not connected"))
@@ -196,6 +200,7 @@ class ChatRepositoryImpl @Inject constructor(
         val emitted = message.serverId == null || socketManager.deleteForMe(messageId, message.conversationId)
         return if (emitted) {
             messageDao.deleteForMe(messageId)
+            refreshConversationPreviewFromLatestMessage(message.conversationId)
             Result.success(Unit)
         } else {
             Result.failure(IllegalStateException("Socket is not connected"))
@@ -264,13 +269,22 @@ class ChatRepositoryImpl @Inject constructor(
         when (event) {
             is SocketEvent.ReceiveMessage -> handleReceiveMessage(event)
             is SocketEvent.NewNotification -> handleNewMessageNotification(event)
-            is SocketEvent.MessageEdited -> messageDao.updateEditedMessage(
-                messageId = event.messageId,
-                content = event.content,
-                updatedAt = event.timestamp
-            )
-            is SocketEvent.MessageUnsent -> messageDao.markUnsent(event.messageId, event.timestamp)
-            is SocketEvent.MessageDeletedForMe -> messageDao.deleteForMe(event.messageId)
+            is SocketEvent.MessageEdited -> {
+                messageDao.updateEditedMessage(
+                    messageId = event.messageId,
+                    content = event.content,
+                    updatedAt = event.timestamp
+                )
+                refreshConversationPreviewAfterMessageMutation(event.conversationId, event.messageId)
+            }
+            is SocketEvent.MessageUnsent -> {
+                messageDao.markUnsent(event.messageId, event.timestamp)
+                refreshConversationPreviewAfterMessageMutation(event.conversationId, event.messageId)
+            }
+            is SocketEvent.MessageDeletedForMe -> {
+                messageDao.deleteForMe(event.messageId)
+                refreshConversationPreviewAfterMessageMutation(event.conversationId, event.messageId)
+            }
             is SocketEvent.ReactionUpdated -> messageDao.replaceReactions(
                 messageId = event.messageId,
                 reactions = event.reactions.orEmpty().flatMap { reaction ->
@@ -292,19 +306,24 @@ class ChatRepositoryImpl @Inject constructor(
             )
             is SocketEvent.MessageUnpinned -> messageDao.markUnpinned(event.messageId)
             is SocketEvent.ReadReceipt -> {
-                if (conversationDao.exists(event.conversationId)) {
+                val accountId = event.resolvedAccountId()
+                if (accountId.isNotBlank() && conversationDao.exists(event.conversationId)) {
                     readReceiptDao.markRead(
                         conversationId = event.conversationId,
-                        accountId = event.accountId,
+                        accountId = accountId,
                         lastReadMessageId = event.messageId,
                         handle = event.handle,
                         displayName = event.displayName,
                         avatarUrl = event.avatarUrl
                     )
+                    if (accountId == secureStorage.getUserId()) {
+                        conversationDao.markCurrentParticipantRead(event.conversationId, event.messageId)
+                    }
                 }
             }
             is SocketEvent.UserTyping -> handleTyping(event)
             is SocketEvent.UserStopTyping -> removeTypingUser(event.conversationId, event.accountId)
+            is SocketEvent.PresenceStatus -> handlePresenceStatus(event)
             is SocketEvent.GroupInfoUpdated -> {
                 if (!conversationDao.exists(event.conversationId)) {
                     syncConversationListFromServer()
@@ -316,11 +335,15 @@ class ChatRepositoryImpl @Inject constructor(
                     updatedAt = Instant.now().toString()
                 )
             }
-            is SocketEvent.GroupDisbanded -> conversationDao.deleteConversation(event.conversationId)
+            is SocketEvent.GroupDisbanded -> {
+                conversationDao.deleteConversation(event.conversationId)
+                subscribeCurrentConversationRooms()
+            }
             is SocketEvent.GroupMemberAdded -> syncConversationMembersOrList(event.conversationId)
             is SocketEvent.GroupMemberRemoved -> {
                 if (event.removedUserId == secureStorage.getUserId()) {
                     conversationDao.deleteConversation(event.conversationId)
+                    subscribeCurrentConversationRooms()
                 } else {
                     syncConversationListFromServer()
                     syncConversationMembersOrList(event.conversationId)
@@ -329,6 +352,7 @@ class ChatRepositoryImpl @Inject constructor(
             is SocketEvent.GroupRoleChanged -> syncConversationMembersOrList(event.conversationId)
             is SocketEvent.GroupYouAdded -> {
                 syncConversationListFromServer()
+                socketManager.joinRoom(event.conversationId)
                 syncConversationMembersOrList(event.conversationId)
             }
             else -> Unit
@@ -363,15 +387,22 @@ class ChatRepositoryImpl @Inject constructor(
         when (val result = safeApiCall { conversationApi.getConversations() }) {
             is NetworkResult.Success -> {
                 val conversations = result.data.data
+                val localById = conversationDao.getAllConversations()
+                    .associateBy { it.conversation.id }
                 val preservedIds = preserveConversationIds + activeConversationId.value
                     ?.takeIf { it.isNotBlank() }
                     ?.let(::setOf)
                     .orEmpty()
                 conversationDao.replaceAll(
                     conversations = conversations.map { it.toEntity() },
-                    participantPreviews = conversations.flatMap { it.toParticipantPreviewEntities() },
+                    participantPreviews = conversations.flatMap { dto ->
+                        dto.toParticipantPreviewEntities()
+                            .withLocalIdentityFallback(localById[dto.id]?.participantPreviews)
+                    },
                     preservedConversationIds = preservedIds
                 )
+                hydrateMissingDirectParticipantIdentities()
+                subscribeCurrentConversationRooms()
             }
             is NetworkResult.Error -> Unit
         }
@@ -406,7 +437,7 @@ class ChatRepositoryImpl @Inject constructor(
         updateLastMessage(
             conversationId = conversationId,
             messageId = clientTempId,
-            content = displayContent(content, type, isUnsent = false),
+            content = displayContent(content, type, isUnsent = false, attachments = attachments),
             senderId = senderId,
             timestamp = graph.message.createdAt,
             type = type,
@@ -466,19 +497,31 @@ class ChatRepositoryImpl @Inject constructor(
         conversationId: String,
         messages: List<MessageDto>
     ) {
-        val latestMessage = messages.maxByOrNull { it.createdAt } ?: return
+        val latestMessage = messages.maxByOrNull { it.createdAt }
+        if (latestMessage == null) {
+            conversationDao.clearLastMessage(conversationId, updatedAt = null)
+            return
+        }
+        val latestVisibleMessage = messages
+            .filterNot { it.isDeleted }
+            .maxByOrNull { it.createdAt }
+        if (latestVisibleMessage == null) {
+            conversationDao.clearLastMessage(conversationId, latestMessage.createdAt)
+            return
+        }
         updateLastMessage(
             conversationId = conversationId,
-            messageId = latestMessage.id,
+            messageId = latestVisibleMessage.id,
             content = displayContent(
-                content = latestMessage.content.orEmpty(),
-                type = latestMessage.type,
-                isUnsent = latestMessage.isUnsent
+                content = latestVisibleMessage.content.orEmpty(),
+                type = latestVisibleMessage.type,
+                isUnsent = latestVisibleMessage.isUnsent,
+                attachments = latestVisibleMessage.attachments.orEmpty()
             ),
-            senderId = latestMessage.senderId,
-            senderName = latestMessage.previewSenderName(),
-            timestamp = latestMessage.createdAt,
-            type = latestMessage.type,
+            senderId = latestVisibleMessage.senderId,
+            senderName = latestVisibleMessage.previewSenderName(),
+            timestamp = latestVisibleMessage.createdAt,
+            type = latestVisibleMessage.type,
             unreadIncrement = 0
         )
     }
@@ -496,14 +539,19 @@ class ChatRepositoryImpl @Inject constructor(
         )
 
         val currentAccountId = secureStorage.getUserId()
-        val isOwnMessage = payload.senderId == currentAccountId
+        val isOwnMessage = payload.isSentByCurrentAccount(currentAccountId)
         val isActiveConversation = activeConversationId.value == payload.conversationId
         val shouldUseServerUnreadCount = conversationState == IncomingConversationState.SyncedFromServer
 
         updateLastMessage(
             conversationId = payload.conversationId,
             messageId = payload.id,
-            content = displayContent(payload.content.orEmpty(), payload.type, payload.isUnsent),
+            content = displayContent(
+                content = payload.content.orEmpty(),
+                type = payload.type,
+                isUnsent = payload.isUnsent,
+                attachments = payload.attachments.orEmpty()
+            ),
             senderId = payload.senderId,
             senderName = graph.message.senderDisplayName ?: graph.message.senderHandle,
             timestamp = payload.createdAt,
@@ -518,11 +566,18 @@ class ChatRepositoryImpl @Inject constructor(
 
     private suspend fun handleNewMessageNotification(event: SocketEvent.NewNotification) {
         if (!event.type.isNewMessageType()) return
-        val conversationId = event.referenceId?.takeIf { it.isNotBlank() } ?: return
+        val candidateConversationIds = event.conversationReferenceIds()
+        if (candidateConversationIds.isEmpty()) {
+            syncConversationListFromServer()
+            return
+        }
 
-        syncConversationListFromServer(preserveConversationIds = setOf(conversationId))
+        syncConversationListFromServer(preserveConversationIds = candidateConversationIds.toSet())
+        val conversationId = candidateConversationIds.firstOrNull { conversationDao.exists(it) }
+            ?: candidateConversationIds.first()
         if (!conversationDao.exists(conversationId)) {
             upsertNotificationConversationPlaceholder(event)
+            subscribeCurrentConversationRooms()
         }
         if (conversationDao.exists(conversationId)) {
             syncLatestMessages(conversationId)
@@ -593,7 +648,8 @@ class ChatRepositoryImpl @Inject constructor(
                 lastMessageContent = displayContent(
                     content = payload.content.orEmpty(),
                     type = payload.type,
-                    isUnsent = payload.isUnsent
+                    isUnsent = payload.isUnsent,
+                    attachments = payload.attachments.orEmpty()
                 ),
                 lastMessageSenderId = payload.senderId,
                 lastMessageSenderName = senderName,
@@ -608,11 +664,12 @@ class ChatRepositoryImpl @Inject constructor(
             listOf(payload.toSenderParticipantPreview(payload.conversationId))
         }
         conversationDao.replaceParticipantPreviews(payload.conversationId, previews)
+        subscribeCurrentConversationRooms()
     }
 
     private suspend fun upsertNotificationConversationPlaceholder(event: SocketEvent.NewNotification) {
-        val conversationId = event.referenceId?.takeIf { it.isNotBlank() } ?: return
-        val actorName = event.actor?.username?.takeIf { it.isNotBlank() } ?: "New message"
+        val conversationId = event.conversationReferenceId() ?: return
+        val actorName = event.actor?.displayLabel() ?: "New message"
         conversationDao.upsertConversation(
             ConversationEntity(
                 id = conversationId,
@@ -644,8 +701,9 @@ class ChatRepositoryImpl @Inject constructor(
                         conversationId = conversationId,
                         position = 0,
                         accountId = actor.id,
-                        handle = actor.username,
-                        displayName = actor.username,
+                        userId = actor.id,
+                        handle = actor.handle ?: actor.username ?: actor.displayName ?: actor.id.orEmpty(),
+                        displayName = actor.displayLabel() ?: actor.id.orEmpty(),
                         avatarUrl = actor.avatarUrl
                     )
                 )
@@ -675,6 +733,48 @@ class ChatRepositoryImpl @Inject constructor(
         )
     }
 
+    private suspend fun refreshConversationPreviewAfterMessageMutation(
+        conversationId: String,
+        messageId: String
+    ) {
+        if (messageDao.getLocalId(messageId) == null) {
+            syncLatestMessages(conversationId)
+            return
+        }
+        refreshConversationPreviewFromLatestMessage(conversationId, syncFromServerIfEmpty = true)
+    }
+
+    private suspend fun refreshConversationPreviewFromLatestMessage(
+        conversationId: String,
+        syncFromServerIfEmpty: Boolean = false
+    ) {
+        val latestMessage = messageDao.getLatestVisibleMessage(conversationId)?.toDomain()
+        if (latestMessage == null) {
+            if (syncFromServerIfEmpty) {
+                syncLatestMessages(conversationId)
+                if (messageDao.getLatestVisibleMessage(conversationId) != null) return
+            }
+            conversationDao.clearLastMessage(conversationId, updatedAt = null)
+            return
+        }
+
+        updateLastMessage(
+            conversationId = conversationId,
+            messageId = latestMessage.serverId ?: latestMessage.localId,
+            content = displayContent(
+                content = latestMessage.content,
+                type = latestMessage.type,
+                isUnsent = latestMessage.isUnsent,
+                attachments = latestMessage.attachments.map { it.url }
+            ),
+            senderId = latestMessage.sender?.accountId ?: latestMessage.senderId,
+            senderName = latestMessage.sender?.displayName ?: latestMessage.sender?.handle,
+            timestamp = latestMessage.createdAt,
+            type = latestMessage.type,
+            unreadIncrement = 0
+        )
+    }
+
     private suspend fun handleTyping(event: SocketEvent.UserTyping) {
         val accountId = secureStorage.getUserId()
         if (event.accountId == accountId) return
@@ -698,6 +798,40 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun handlePresenceStatus(event: SocketEvent.PresenceStatus) {
+        val participantIds = listOfNotNull(
+            event.accountId?.takeIf { it.isNotBlank() },
+            event.userId?.takeIf { it.isNotBlank() }
+        ).distinct()
+        val conversationId = event.conversationId?.takeIf { it.isNotBlank() }
+        if (participantIds.isEmpty() && conversationId == null) return
+
+        val currentAccountId = secureStorage.getUserId()
+        if (!currentAccountId.isNullOrBlank() && participantIds.contains(currentAccountId)) return
+
+        val isOnline = event.isOnline ?: event.status.equals("online", ignoreCase = true)
+        var updatedRows = 0
+        if (conversationId != null) {
+            updatedRows += conversationDao.updateDirectPresenceByConversationId(
+                conversationId = conversationId,
+                isOnline = isOnline
+            )
+        }
+        if (participantIds.isNotEmpty()) {
+            updatedRows += conversationDao.updateDirectPresence(
+                participantIds = participantIds,
+                isOnline = isOnline
+            )
+        }
+        if (updatedRows == 0 && participantIds.isNotEmpty()) {
+            hydrateMissingDirectParticipantIdentities()
+            conversationDao.updateDirectPresence(
+                participantIds = participantIds,
+                isOnline = isOnline
+            )
+        }
+    }
+
     private fun removeTypingUser(conversationId: String, accountId: String) {
         val jobKey = "$conversationId:$accountId"
         typingExpiryJobs.remove(jobKey)?.cancel()
@@ -707,13 +841,58 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun displayContent(content: String, type: String, isUnsent: Boolean): String {
-        if (isUnsent) return "Message unsent"
-        if (content.isNotBlank()) return content
-        return when (type.lowercase()) {
-            "image" -> "Image"
-            "file" -> "File"
-            else -> ""
+    private fun displayContent(
+        content: String,
+        type: String,
+        isUnsent: Boolean,
+        attachments: List<String> = emptyList()
+    ): String = displayMessagePreviewContent(content, type, isUnsent, attachments)
+
+    private suspend fun hydrateMissingDirectParticipantIdentities() {
+        conversationDao.getDirectConversations()
+            .filter { it.needsDirectParticipantIdentityHydration() }
+            .forEach { relation -> syncConversationMembers(relation.conversation.id) }
+    }
+
+    private suspend fun subscribeCurrentConversationRooms() {
+        socketManager.subscribeConversationListRooms(
+            conversationDao.getAllConversations().map { it.conversation.id }
+        )
+    }
+
+    private fun ConversationWithParticipantPreviews.needsDirectParticipantIdentityHydration(): Boolean {
+        if (!conversation.type.equals("direct", ignoreCase = true)) return false
+        return participantPreviews.size < DIRECT_MEMBER_COUNT ||
+            participantPreviews.any { it.accountId.isNullOrBlank() || it.userId.isNullOrBlank() }
+    }
+
+    private fun List<ConversationParticipantPreviewEntity>.withLocalIdentityFallback(
+        local: List<ConversationParticipantPreviewEntity>?
+    ): List<ConversationParticipantPreviewEntity> {
+        val localPreviews = local.orEmpty()
+        val localLooksHydrated = localPreviews.any {
+            !it.accountId.isNullOrBlank() || !it.userId.isNullOrBlank()
+        }
+        if (!localLooksHydrated) return this
+        if (isEmpty() || all { it.accountId.isNullOrBlank() && it.userId.isNullOrBlank() }) {
+            return localPreviews
+        }
+
+        return map { preview ->
+            if (!preview.accountId.isNullOrBlank() && !preview.userId.isNullOrBlank()) {
+                preview
+            } else {
+                val localMatch = localPreviews.firstOrNull {
+                    (!preview.accountId.isNullOrBlank() && it.accountId == preview.accountId) ||
+                        (!preview.userId.isNullOrBlank() && it.userId == preview.userId) ||
+                        it.handle == preview.handle ||
+                        it.displayName == preview.displayName
+                }
+                preview.copy(
+                    accountId = preview.accountId ?: localMatch?.accountId,
+                    userId = preview.userId ?: localMatch?.userId
+                )
+            }
         }
     }
 
@@ -727,6 +906,11 @@ class ChatRepositoryImpl @Inject constructor(
             ?: sender?.id
             ?: sender?.userId
             ?: senderId.takeIf { it.isNotBlank() }
+
+    private fun MessagePayload.isSentByCurrentAccount(currentAccountId: String?): Boolean {
+        val accountId = currentAccountId?.takeIf { it.isNotBlank() } ?: return false
+        return senderId == accountId || senderAccountId() == accountId
+    }
 
     private fun MessagePayload.previewSenderHandle(): String? =
         sender?.handle
@@ -760,6 +944,7 @@ class ChatRepositoryImpl @Inject constructor(
             conversationId = conversationId,
             position = 0,
             accountId = accountId,
+            userId = sender?.userId?.takeIf { it.isNotBlank() },
             handle = handle,
             displayName = previewSenderName() ?: handle,
             avatarUrl = previewSenderAvatarUrl()
@@ -780,6 +965,26 @@ class ChatRepositoryImpl @Inject constructor(
     private fun com.thuo_ng.swift_chat_android.core.socket.ReactionPayload.accountIds(): List<String> =
         (accountId?.let(::listOf) ?: userIds.orEmpty())
             .filter { it.isNotBlank() }
+
+    private fun SocketEvent.ReadReceipt.resolvedAccountId(): String =
+        accountId?.takeIf { it.isNotBlank() } ?: userId.orEmpty()
+
+    private fun SocketEvent.NewNotification.conversationReferenceId(): String? =
+        conversationReferenceIds().firstOrNull()
+
+    private fun SocketEvent.NewNotification.conversationReferenceIds(): List<String> =
+        listOfNotNull(
+            payload?.conversationId?.takeIf { it.isNotBlank() },
+            message?.conversationId?.takeIf { it.isNotBlank() },
+            conversationId?.takeIf { it.isNotBlank() },
+            referenceId?.takeIf { it.isNotBlank() },
+            payload?.referenceId?.takeIf { it.isNotBlank() }
+        ).distinct()
+
+    private fun com.thuo_ng.swift_chat_android.core.socket.ActorPayload.displayLabel(): String? =
+        displayName?.takeIf { it.isNotBlank() }
+            ?: username?.takeIf { it.isNotBlank() }
+            ?: handle?.takeIf { it.isNotBlank() }
 
     private companion object {
         const val TYPING_EXPIRY_MS = 4_000L

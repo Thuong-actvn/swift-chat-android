@@ -106,14 +106,18 @@ class NotificationRepositoryImpl @Inject constructor(
             is SocketEvent.NewNotification -> upsertNotification(
                 id = event.id,
                 type = event.type,
-                referenceId = event.referenceId,
+                referenceId = event.notificationReferenceId(),
                 isRead = event.isRead,
                 createdAt = event.createdAt,
                 actor = event.actor?.let {
+                    val displayName = it.displayName
+                        ?: it.username
+                        ?: it.handle
+                        ?: it.id
                     com.thuo_ng.swift_chat_android.domain.model.NotificationActor(
                         id = it.id,
-                        handle = it.username,
-                        displayName = it.username,
+                        handle = it.handle ?: it.username,
+                        displayName = displayName,
                         avatarUrl = it.avatarUrl
                     )
                 }
@@ -240,6 +244,13 @@ class NotificationRepositoryImpl @Inject constructor(
     private fun socketNotificationKey(vararg parts: String): String {
         return parts.joinToString(separator = ":")
     }
+
+    private fun SocketEvent.NewNotification.notificationReferenceId(): String? =
+        conversationId?.takeIf { it.isNotBlank() }
+            ?: payload?.conversationId?.takeIf { it.isNotBlank() }
+            ?: message?.conversationId?.takeIf { it.isNotBlank() }
+            ?: referenceId?.takeIf { it.isNotBlank() }
+            ?: payload?.referenceId?.takeIf { it.isNotBlank() }
 
     private fun parseNotificationsResponse(element: JsonElement): NotificationPage {
         val notifications = when {

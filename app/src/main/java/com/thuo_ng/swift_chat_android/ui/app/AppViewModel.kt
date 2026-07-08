@@ -10,6 +10,7 @@ import com.thuo_ng.swift_chat_android.core.socket.SocketEvent
 import com.thuo_ng.swift_chat_android.core.socket.SocketManager
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
 import com.thuo_ng.swift_chat_android.domain.repository.ChatRepository
+import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
 import com.thuo_ng.swift_chat_android.domain.repository.NotificationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -28,6 +29,7 @@ class AppViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val socketManager: SocketManager,
     private val notificationRepository: NotificationRepository,
+    private val conversationRepository: ConversationRepository,
     private val chatRepository: ChatRepository
 ) : ViewModel() {
     private companion object {
@@ -80,7 +82,8 @@ class AppViewModel @Inject constructor(
                         is SocketEvent.ReadReceipt,
                         is SocketEvent.ReactionUpdated,
                         is SocketEvent.MessagePinned,
-                        is SocketEvent.MessageUnpinned -> chatRepository.handleSocketEvent(event)
+                        is SocketEvent.MessageUnpinned,
+                        is SocketEvent.PresenceStatus -> chatRepository.handleSocketEvent(event)
                         is SocketEvent.NewNotification,
                         is SocketEvent.GroupInfoUpdated,
                         is SocketEvent.GroupMemberAdded,
@@ -102,6 +105,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             socketManager.connectionState.collect { state ->
                 if (state is SocketConnectionState.Connected) {
+                    conversationRepository.syncConversations()
                     notificationRepository.syncUnreadCount()
                 }
             }

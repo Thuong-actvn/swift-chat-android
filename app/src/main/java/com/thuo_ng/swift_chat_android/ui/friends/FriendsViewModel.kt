@@ -419,11 +419,14 @@ class FriendsViewModel @Inject constructor(
     }
 
     private fun applyPresence(event: SocketEvent.PresenceStatus) {
-        val isOnline = event.status.equals("online", ignoreCase = true)
+        val accountId = event.accountId?.takeIf { it.isNotBlank() }
+            ?: event.userId?.takeIf { it.isNotBlank() }
+            ?: return
+        val isOnline = event.isOnline ?: event.status.equals("online", ignoreCase = true)
         _uiState.update {
             it.copy(
                 friends = it.friends.map { friend ->
-                    if (friend.id == event.accountId) {
+                    if (friend.id == accountId) {
                         friend.copy(isOnline = isOnline)
                     } else {
                         friend

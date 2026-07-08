@@ -43,6 +43,10 @@ fun String.isGroupRoleChangedType(): Boolean {
 fun String.isNewMessageType(): Boolean {
     val normalized = normalizeNotificationType()
     return normalized == "new_message" ||
+        normalized == "message" ||
+        normalized == "chat_message" ||
+        normalized == "message_received" ||
+        normalized == "message_created" ||
         normalized == "message_new" ||
         normalized == "chat_new_message"
 }

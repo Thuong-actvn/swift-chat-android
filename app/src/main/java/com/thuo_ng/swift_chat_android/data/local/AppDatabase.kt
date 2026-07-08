@@ -31,7 +31,7 @@ import com.thuo_ng.swift_chat_android.data.local.entity.UserEntity
         NotificationSummaryEntity::class
     ],
     exportSchema = false,
-    version = 8
+    version = 9
 )
 abstract class AppDatabase: RoomDatabase() {
     abstract fun userDao(): UserDao

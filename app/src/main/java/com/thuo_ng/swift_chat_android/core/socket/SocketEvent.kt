@@ -32,7 +32,8 @@ sealed class SocketEvent {
     ) : SocketEvent()
     data class ReadReceipt(
         val conversationId: String,
-        val accountId: String,
+        val accountId: String? = null,
+        val userId: String? = null,
         val messageId: String,
         val handle: String? = null,
         val displayName: String? = null,
@@ -57,16 +58,22 @@ sealed class SocketEvent {
     ) : SocketEvent()
 
     data class PresenceStatus(
-        val userId: String,
-        val accountId: String,
-        val status: String,
-        val timestamp: Long
+        val conversationId: String? = null,
+        val userId: String? = null,
+        val accountId: String? = null,
+        val status: String? = null,
+        val isOnline: Boolean? = null,
+        val lastSeen: String? = null,
+        val timestamp: Long? = null
     ) : SocketEvent()
 
     data class NewNotification(
         val id: String,
         val type: String,
         val referenceId: String?,
+        val conversationId: String? = null,
+        val payload: NotificationDataPayload? = null,
+        val message: MessagePayload? = null,
         val isRead: Boolean,
         val createdAt: String,
         val actor: ActorPayload?
@@ -142,6 +149,12 @@ data class ForwardedFromPayload(
     val conversationId: String
 )
 
+data class NotificationDataPayload(
+    val conversationId: String? = null,
+    val messageId: String? = null,
+    val referenceId: String? = null
+)
+
 data class ReactionPayload(
     val emoji: String = "",
     val count: Int = 0,
@@ -150,4 +163,10 @@ data class ReactionPayload(
     val createdAt: String? = null
 )
 
-data class ActorPayload(val id: String, val username: String, val avatarUrl: String?)
+data class ActorPayload(
+    val id: String? = null,
+    val username: String? = null,
+    val handle: String? = null,
+    val displayName: String? = null,
+    val avatarUrl: String? = null
+)

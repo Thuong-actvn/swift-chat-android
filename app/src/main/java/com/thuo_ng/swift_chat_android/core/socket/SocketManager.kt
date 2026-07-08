@@ -5,6 +5,8 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.thuo_ng.swift_chat_android.BuildConfig
 import com.thuo_ng.swift_chat_android.core.network.TokenRefreshManager
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
@@ -36,6 +38,8 @@ class SocketManager @Inject constructor(
         const val BASE_URL      = BuildConfig.BASE_URL
         const val NAMESPACE     = "chat"
         const val HEARTBEAT_INTERVAL_MS = 30_000L
+        private val WRAPPER_KEYS = listOf("data", "message", "notification", "payload")
+        private const val MAX_WRAPPER_DEPTH = 2
     }
 
     private var socket: Socket? = null
@@ -43,6 +47,8 @@ class SocketManager @Inject constructor(
     private var isRefreshingToken = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var heartbeatJob: Job? = null
+    private val activeConversationRooms = mutableSetOf<String>()
+    private val listConversationRooms = mutableSetOf<String>()
 
     // ── Expose Flows ─────────────────────────────────────────────
     private val _events = MutableSharedFlow<SocketEvent>(extraBufferCapacity = 64)
@@ -98,8 +104,7 @@ class SocketManager @Inject constructor(
             secureStorage.tokenFlow.collect { token ->
                 when {
                     token == null -> disconnect()
-                    socket == null -> connect()
-                    token != activeToken -> reconnectWithLatestToken()
+                    socket != null && token != activeToken -> reconnectWithLatestToken()
                 }
             }
         }
@@ -130,6 +135,8 @@ class SocketManager @Inject constructor(
         val options = IO.Options.builder()
             .setPath("/socket.io")
             .setAuth(mapOf("token" to token))
+            .setExtraHeaders(mapOf("Authorization" to listOf("Bearer $token")))
+            .setTransports(arrayOf("websocket"))
             .setReconnection(true)
             .setReconnectionAttempts(Int.MAX_VALUE)
             .setReconnectionDelay(2_000)
@@ -141,6 +148,7 @@ class SocketManager @Inject constructor(
                 Log.d(TAG, "EVENT_CONNECT: Connected to server successfully")
                 _connectionState.value = SocketConnectionState.Connected
                 emitRejoinRooms()
+                rejoinTrackedRooms()
                 startHeartbeat()
             }
             on(Socket.EVENT_DISCONNECT) {
@@ -164,6 +172,13 @@ class SocketManager @Inject constructor(
                     handleAuthError(message)
                 }
             }
+            on("exception") { args ->
+                val message = args.getOrNull(0)?.toString()
+                Log.e(TAG, "EVENT_EXCEPTION: Server exception. Detail: $message")
+                if (isAuthError(message)) {
+                    handleAuthError(message)
+                }
+            }
             registerServerEvents()
             connect()
         }
@@ -177,6 +192,8 @@ class SocketManager @Inject constructor(
         socket = null
         activeToken = null
         isRefreshingToken = false
+        activeConversationRooms.clear()
+        listConversationRooms.clear()
         _connectionState.value = SocketConnectionState.Disconnected
     }
 
@@ -214,20 +231,60 @@ class SocketManager @Inject constructor(
     }
 
     // ── Room management ─────────────────────────────────────────
+    @Synchronized
     fun joinRoom(conversationId: String): Boolean {
         Log.d(TAG, "Joining chat room for conversation: $conversationId")
-        return emit("chat:join_room", JSONObject().put("conversationId", conversationId))
+        activeConversationRooms += conversationId
+        return emitJoinRoom(conversationId)
     }
 
+    @Synchronized
     fun leaveRoom(conversationId: String): Boolean {
         Log.d(TAG, "Leaving chat room for conversation: $conversationId")
-        return emit("chat:leave_room", JSONObject().put("conversationId", conversationId))
+        activeConversationRooms -= conversationId
+        return if (conversationId in listConversationRooms) {
+            Log.d(TAG, "Keeping room joined because it is subscribed by conversation list: $conversationId")
+            true
+        } else {
+            emitLeaveRoom(conversationId)
+        }
+    }
+
+    @Synchronized
+    fun subscribeConversationListRooms(conversationIds: Collection<String>) {
+        val nextRooms = conversationIds
+            .mapNotNull { it.takeIf(String::isNotBlank) }
+            .toSet()
+        val removedRooms = listConversationRooms - nextRooms
+
+        listConversationRooms.clear()
+        listConversationRooms += nextRooms
+
+        nextRooms.forEach(::emitJoinRoom)
+        removedRooms
+            .filterNot { it in activeConversationRooms }
+            .forEach(::emitLeaveRoom)
     }
 
     private fun emitRejoinRooms(): Boolean {
         Log.d(TAG, "Emitting chat:rejoin_rooms request to join active conversation rooms")
         return emit("chat:rejoin_rooms", JSONObject())
     }
+
+    private fun rejoinTrackedRooms() {
+        val trackedRooms = synchronized(this) {
+            activeConversationRooms + listConversationRooms
+        }
+        if (trackedRooms.isEmpty()) return
+        Log.d(TAG, "Rejoining tracked conversation rooms: ${trackedRooms.size}")
+        trackedRooms.forEach(::emitJoinRoom)
+    }
+
+    private fun emitJoinRoom(conversationId: String): Boolean =
+        emit("chat:join_room", JSONObject().put("conversationId", conversationId))
+
+    private fun emitLeaveRoom(conversationId: String): Boolean =
+        emit("chat:leave_room", JSONObject().put("conversationId", conversationId))
 
     // ── Chat actions ────────────────────────────────────────────
     fun sendMessage(payload: SendMessagePayload): Boolean {
@@ -310,10 +367,14 @@ class SocketManager @Inject constructor(
 
     // ── Register server events ─────────────────────────────────
     private fun Socket.registerServerEvents() {
-        onEvent("chat:receive_message")      { args -> parse<MessagePayload>(args)?.let { _events.tryEmit(SocketEvent.ReceiveMessage(it)) } }
+        onEvent("chat:receive_message")      { args ->
+            parse<MessagePayload>(args) { it.hasMessageIdentity() }
+                ?.let { _events.tryEmit(SocketEvent.ReceiveMessage(it)) }
+        }
         onEvent("chat:user_typing")          { args -> parse<SocketEvent.UserTyping>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:user_stop_typing")     { args -> parse<SocketEvent.UserStopTyping>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:message_unsent")       { args -> parse<SocketEvent.MessageUnsent>(args)?.let { _events.tryEmit(it) } }
+        onEvent("chat:message_deleted")      { args -> parse<SocketEvent.MessageUnsent>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:message_deleted_for_me") { args -> parse<SocketEvent.MessageDeletedForMe>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:message_edited")       { args -> parse<SocketEvent.MessageEdited>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:read_receipt")         { args -> parse<SocketEvent.ReadReceipt>(args)?.let { _events.tryEmit(it) } }
@@ -321,8 +382,14 @@ class SocketManager @Inject constructor(
         onEvent("chat:message_pinned")       { args -> parse<SocketEvent.MessagePinned>(args)?.let { _events.tryEmit(it) } }
         onEvent("chat:message_unpinned")     { args -> parse<SocketEvent.MessageUnpinned>(args)?.let { _events.tryEmit(it) } }
         
-        onEvent("presence:status")           { args -> parse<SocketEvent.PresenceStatus>(args)?.let { _events.tryEmit(it) } }
-        onEvent("notification:new")          { args -> parse<SocketEvent.NewNotification>(args)?.let { _events.tryEmit(it) } }
+        onEvent("presence:status")           { args ->
+            parse<SocketEvent.PresenceStatus>(args) { it.hasPresenceIdentity() && it.hasPresenceState() }
+                ?.let { _events.tryEmit(it) }
+        }
+        onEvent("notification:new")          { args ->
+            parse<SocketEvent.NewNotification>(args) { it.hasNotificationIdentity() }
+                ?.let { _events.tryEmit(it) }
+        }
         onEvent("friend:updated")            { _events.tryEmit(SocketEvent.FriendUpdated) }
         
         onEvent("group:info_updated")        { args -> parse<SocketEvent.GroupInfoUpdated>(args)?.let { _events.tryEmit(it) } }
@@ -338,19 +405,68 @@ class SocketManager @Inject constructor(
 
     private fun Any.toJsonObject(): JSONObject = JSONObject(gson.toJson(this))
 
-    private inline fun <reified T> parse(args: Array<Any>): T? {
+    private inline fun <reified T> parse(
+        args: Array<Any>,
+        noinline isValid: (T) -> Boolean = { true }
+    ): T? {
         if (args.isEmpty()) return null
         val raw = args[0].toString()
         Log.d(TAG, "Received Event raw payload: $raw")
-        return try {
-            val parsed = gson.fromJson(raw, T::class.java)
-            Log.d(TAG, "Parsed payload into class ${T::class.java.simpleName}: $parsed")
-            parsed
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing payload into ${T::class.java.simpleName}", e)
-            null
+        for (candidate in payloadCandidates(raw)) {
+            try {
+                val parsed = gson.fromJson(candidate, T::class.java)
+                if (isValid(parsed)) {
+                    Log.d(TAG, "Parsed payload into class ${T::class.java.simpleName}: $parsed")
+                    return parsed
+                }
+                Log.w(TAG, "Ignoring invalid ${T::class.java.simpleName} payload candidate: $candidate")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing payload into ${T::class.java.simpleName}", e)
+            }
+        }
+        return null
+    }
+
+    private fun payloadCandidates(raw: String): List<String> {
+        val candidates = mutableListOf<String>()
+        val root = runCatching { JsonParser.parseString(raw) }.getOrNull()
+        val jsonObject = root?.takeIf { it.isJsonObject }?.asJsonObject
+        if (jsonObject != null) {
+            collectWrappedPayloads(jsonObject, candidates)
+        }
+        candidates += raw
+        return candidates.distinct()
+    }
+
+    private fun collectWrappedPayloads(
+        jsonObject: JsonObject,
+        candidates: MutableList<String>,
+        depth: Int = 0
+    ) {
+        if (depth >= MAX_WRAPPER_DEPTH) return
+        WRAPPER_KEYS.forEach { key ->
+            val child = jsonObject.objectValue(key) ?: return@forEach
+            candidates += child.toString()
+            collectWrappedPayloads(child, candidates, depth + 1)
         }
     }
+
+    private fun JsonObject.objectValue(key: String) =
+        takeIf { has(key) && !get(key).isJsonNull && get(key).isJsonObject }?.getAsJsonObject(key)
+
+    private fun MessagePayload.hasMessageIdentity(): Boolean = runCatching {
+        id.isNotBlank() && conversationId.isNotBlank() && senderId.isNotBlank() && type.isNotBlank()
+    }.getOrDefault(false)
+
+    private fun SocketEvent.PresenceStatus.hasPresenceIdentity(): Boolean =
+        !accountId.isNullOrBlank() || !userId.isNullOrBlank()
+
+    private fun SocketEvent.PresenceStatus.hasPresenceState(): Boolean =
+        isOnline != null || !status.isNullOrBlank()
+
+    private fun SocketEvent.NewNotification.hasNotificationIdentity(): Boolean = runCatching {
+        id.isNotBlank() && type.isNotBlank()
+    }.getOrDefault(false)
 
     private fun emit(event: String, data: JSONObject): Boolean {
         val currentSocket = socket

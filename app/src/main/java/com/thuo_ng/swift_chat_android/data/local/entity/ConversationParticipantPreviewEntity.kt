@@ -18,6 +18,7 @@ import androidx.room.Index
     indices = [
         Index(value = ["conversationId"]),
         Index(value = ["accountId"]),
+        Index(value = ["userId"]),
         Index(value = ["handle"])
     ]
 )
@@ -25,6 +26,7 @@ data class ConversationParticipantPreviewEntity(
     val conversationId: String,
     val position: Int,
     val accountId: String?,
+    val userId: String?,
     val handle: String,
     val displayName: String,
     val avatarUrl: String?

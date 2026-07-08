@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
+import com.thuo_ng.swift_chat_android.core.socket.SocketManager
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.local.dao.ConversationDao
 import com.thuo_ng.swift_chat_android.data.local.entity.ConversationEntity
@@ -37,6 +38,7 @@ class ConversationRepositoryImpl @Inject constructor(
     private val conversationApi: ConversationApi,
     private val messageApi: MessageApi,
     private val conversationDao: ConversationDao,
+    private val socketManager: SocketManager,
     private val secureStorage: SecureStorage
 ) : ConversationRepository {
 
@@ -66,10 +68,12 @@ class ConversationRepositoryImpl @Inject constructor(
                     conversations = serverEntities,
                     participantPreviews = conversationDtos.flatMap { dto ->
                         dto.toParticipantPreviewEntities()
-                            .withLocalAccountIdFallback(localById[dto.id]?.participantPreviews)
+                            .withLocalIdentityFallback(localById[dto.id]?.participantPreviews)
                     },
                     preservedConversationIds = preserveConversationIds
                 )
+                hydrateMissingDirectParticipantIdentities()
+                subscribeCurrentConversationRooms()
                 hydrateBlankAttachmentPreviews(serverEntities)
                 NetworkResult.Success(result.data.toDomain())
             }
@@ -384,26 +388,61 @@ class ConversationRepositoryImpl @Inject constructor(
             }
     }
 
-    private fun List<ConversationParticipantPreviewEntity>.withLocalAccountIdFallback(
+    private fun List<ConversationParticipantPreviewEntity>.withLocalIdentityFallback(
         local: List<ConversationParticipantPreviewEntity>?
     ): List<ConversationParticipantPreviewEntity> {
         val localPreviews = local.orEmpty()
-        val localLooksHydrated = localPreviews.size >= 2 &&
-            localPreviews.any { !it.accountId.isNullOrBlank() }
+        val localLooksHydrated = localPreviews.any {
+            !it.accountId.isNullOrBlank() || !it.userId.isNullOrBlank()
+        }
         if (!localLooksHydrated) return this
-        if (isEmpty() || all { it.accountId.isNullOrBlank() }) return localPreviews
+        if (isEmpty() || all { it.accountId.isNullOrBlank() && it.userId.isNullOrBlank() }) {
+            return localPreviews
+        }
 
         return map { preview ->
-            if (!preview.accountId.isNullOrBlank()) {
+            if (!preview.accountId.isNullOrBlank() && !preview.userId.isNullOrBlank()) {
                 preview
             } else {
                 val localMatch = localPreviews.firstOrNull {
-                    it.handle == preview.handle ||
+                    (!preview.accountId.isNullOrBlank() && it.accountId == preview.accountId) ||
+                        (!preview.userId.isNullOrBlank() && it.userId == preview.userId) ||
+                        it.handle == preview.handle ||
                         it.displayName == preview.displayName
                 }
-                preview.copy(accountId = localMatch?.accountId)
+                preview.copy(
+                    accountId = preview.accountId ?: localMatch?.accountId,
+                    userId = preview.userId ?: localMatch?.userId
+                )
             }
         }
+    }
+
+    private suspend fun hydrateMissingDirectParticipantIdentities() {
+        conversationDao.getDirectConversations()
+            .filter { it.needsDirectParticipantIdentityHydration() }
+            .forEach { relation ->
+                when (val result = safeApiCall { conversationApi.getConversationMembers(relation.conversation.id) }) {
+                    is NetworkResult.Success -> {
+                        val participantPreviews = result.data.toParticipantPreviewEntities(relation.conversation.id)
+                        conversationDao.replaceParticipantPreviews(
+                            conversationId = relation.conversation.id,
+                            participantPreviews = participantPreviews
+                        )
+                        conversationDao.updateTotalParticipants(
+                            conversationId = relation.conversation.id,
+                            totalParticipants = participantPreviews.size
+                        )
+                    }
+                    is NetworkResult.Error -> Unit
+                }
+            }
+    }
+
+    private suspend fun subscribeCurrentConversationRooms() {
+        socketManager.subscribeConversationListRooms(
+            conversationDao.getAllConversations().map { it.conversation.id }
+        )
     }
 
     private suspend fun hydrateDirectConversationMembersFor(accountId: String): Conversation? {
@@ -417,7 +456,7 @@ class ConversationRepositoryImpl @Inject constructor(
                             conversationId = relation.conversation.id,
                             participantPreviews = participantPreviews
                         )
-                        if (participantPreviews.any { it.accountId == accountId }) {
+                        if (participantPreviews.any { it.accountId == accountId || it.userId == accountId }) {
                             return relation.copy(participantPreviews = participantPreviews).toDomain()
                         }
                     }
@@ -433,17 +472,27 @@ class ConversationRepositoryImpl @Inject constructor(
         return firstOrNull { relation ->
             relation.conversation.type.equals("direct", ignoreCase = true) &&
                 relation.hasHydratedParticipantPreviews() &&
-                relation.participantPreviews.any { it.accountId == accountId }
+                relation.participantPreviews.any { it.accountId == accountId || it.userId == accountId }
         }?.toDomain()
     }
 
     private fun ConversationWithParticipantPreviews.hasHydratedParticipantPreviews(): Boolean {
         return participantPreviews.size >= 2 &&
-            participantPreviews.any { !it.accountId.isNullOrBlank() }
+            participantPreviews.any { !it.accountId.isNullOrBlank() || !it.userId.isNullOrBlank() }
+    }
+
+    private fun ConversationWithParticipantPreviews.needsDirectParticipantIdentityHydration(): Boolean {
+        if (!conversation.type.equals("direct", ignoreCase = true)) return false
+        return participantPreviews.size < DIRECT_MEMBER_COUNT ||
+            participantPreviews.any { it.accountId.isNullOrBlank() || it.userId.isNullOrBlank() }
     }
 
     private fun Conversation.isDirectConversationWith(accountId: String): Boolean {
         return type.equals("direct", ignoreCase = true) &&
             participantPreview.any { it.accountId == accountId }
+    }
+
+    private companion object {
+        const val DIRECT_MEMBER_COUNT = 2
     }
 }

@@ -45,7 +45,8 @@ fun ConversationDto.toParticipantPreviewEntities(): List<ConversationParticipant
         ConversationParticipantPreviewEntity(
             conversationId = id,
             position = index,
-            accountId = preview.accountId,
+            accountId = preview.resolvedAccountId(),
+            userId = preview.resolvedUserId(),
             handle = preview.handle,
             displayName = preview.displayName?.takeIf { it.isNotBlank() } ?: preview.handle,
             avatarUrl = preview.avatarUrl
@@ -87,6 +88,7 @@ fun ConversationDetailDto.toParticipantPreviewEntities(): List<ConversationParti
             conversationId = id,
             position = index,
             accountId = participant.accountId,
+            userId = participant.user?.id,
             handle = participant.user?.handle?.takeIf { it.isNotBlank() } ?: participant.accountId,
             displayName = participant.user?.displayName?.takeIf { it.isNotBlank() }
                 ?: participant.user?.handle?.takeIf { it.isNotBlank() }
@@ -161,6 +163,7 @@ fun List<ConversationMemberDto>.toParticipantPreviewEntities(
             conversationId = conversationId,
             position = index,
             accountId = accountId,
+            userId = member.userId?.takeIf { it.isNotBlank() },
             handle = member.handle?.takeIf { it.isNotBlank() } ?: accountId,
             displayName = member.displayName?.takeIf { it.isNotBlank() }
                 ?: member.handle?.takeIf { it.isNotBlank() }

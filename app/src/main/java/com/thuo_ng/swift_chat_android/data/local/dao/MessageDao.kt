@@ -33,6 +33,17 @@ interface MessageDao {
     )
     suspend fun getOldestServerMessageId(conversationId: String): String?
 
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM messages
+        WHERE conversationId = :conversationId AND isDeleted = 0
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestVisibleMessage(conversationId: String): MessageWithDetails?
+
     @Query(
         """
         SELECT localId FROM messages
