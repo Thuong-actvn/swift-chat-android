@@ -2,6 +2,8 @@
 agp = "9.2.1"
 coreKtx = "1.19.0"
 credentials = "1.7.0-alpha02"
+firebaseBom = "34.15.0"
+firebaseMessaging = "24.1.0"
 googleid = "1.2.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -39,6 +41,9 @@ androidx-paging-runtime-ktx = { module = "androidx.paging:paging-runtime-ktx", v
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomVersion" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomVersion" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomVersion" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
 googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

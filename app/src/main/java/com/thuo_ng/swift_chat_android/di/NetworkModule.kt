@@ -71,6 +71,15 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @Named("MainAuthApi")
+    fun provideMainAuthApi(
+        @Named("MainRetrofit") retrofit: Retrofit
+    ): AuthApi {
+        return retrofit.create(AuthApi::class.java)
+    }
+
+    @Provides
+    @Singleton
     @Named("MainClient")
     fun provideMainOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor,

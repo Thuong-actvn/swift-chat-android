@@ -34,6 +34,7 @@ class SecureStorage @Inject constructor(
         private const val KEY_ACCESS_TOKEN = "key_access_token"
         private const val KEY_REFRESH_TOKEN = "key_refresh_token"
         private const val KEY_USER_ID = "key_user_id"
+        private const val KEY_FCM_TOKEN = "key_fcm_token"
     }
 
     private val _tokenFlow = MutableStateFlow(sharedPreferences.getString(KEY_ACCESS_TOKEN, null))
@@ -41,6 +42,9 @@ class SecureStorage @Inject constructor(
 
     private val _userIdFlow = MutableStateFlow(sharedPreferences.getString(KEY_USER_ID, null))
     val userIdFlow: StateFlow<String?> = _userIdFlow.asStateFlow()
+
+    private val _fcmTokenFlow = MutableStateFlow(sharedPreferences.getString(KEY_FCM_TOKEN, null))
+    val fcmTokenFlow: StateFlow<String?> = _fcmTokenFlow.asStateFlow()
     
     @Synchronized
     fun saveTokens(accessToken: String, refreshToken: String) {
@@ -58,6 +62,15 @@ class SecureStorage @Inject constructor(
         }
         _userIdFlow.value = userId
     }
+
+    @Synchronized
+    fun saveFcmToken(token: String) {
+        sharedPreferences.edit {
+            putString(KEY_FCM_TOKEN, token)
+        }
+        _fcmTokenFlow.value = token
+    }
+
     @Synchronized
     fun getAccessToken(): String? {
         return sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
@@ -74,9 +87,15 @@ class SecureStorage @Inject constructor(
     }
 
     @Synchronized
+    fun getFcmToken(): String? {
+        return sharedPreferences.getString(KEY_FCM_TOKEN, null)
+    }
+
+    @Synchronized
     fun clearAll() {
         sharedPreferences.edit { clear() }
         _tokenFlow.value = null
         _userIdFlow.value = null
+        _fcmTokenFlow.value = null
     }
 }

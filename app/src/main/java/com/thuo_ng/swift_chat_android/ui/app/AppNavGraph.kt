@@ -26,6 +26,7 @@ fun AppNavGraph(
     appViewModel: AppViewModel = hiltViewModel()
 ) {
     val authState by appViewModel.authState.collectAsStateWithLifecycle()
+    val pendingConversationId by appViewModel.pendingConversationId.collectAsStateWithLifecycle()
     val rootNavController = rememberNavController()
     val context = LocalContext.current
 
@@ -53,12 +54,25 @@ fun AppNavGraph(
     LaunchedEffect(authState) {
         when (authState) {
             AppAuthState.Loading -> Unit
-            AppAuthState.Authenticated -> rootNavController.navigate(MainGraph) {
-                popUpTo(SplashRoute) { inclusive = true }
+            AppAuthState.Authenticated -> {
+                rootNavController.navigate(MainGraph) {
+                    popUpTo(SplashRoute) { inclusive = true }
+                }
             }
+
             AppAuthState.Unauthenticated -> rootNavController.navigate(AuthGraph) {
                 popUpTo(SplashRoute) { inclusive = true }
             }
+        }
+    }
+
+    LaunchedEffect(pendingConversationId, authState) {
+        if (authState == AppAuthState.Authenticated && pendingConversationId != null) {
+            rootNavController.currentBackStackEntry?.savedStateHandle?.set(
+                "navigate_to_chat",
+                pendingConversationId
+            )
+            appViewModel.clearPendingConversationId()
         }
     }
 }

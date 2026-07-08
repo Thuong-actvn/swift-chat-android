@@ -7,6 +7,7 @@ import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
 import com.thuo_ng.swift_chat_android.data.remote.api.UserApi
+import com.thuo_ng.swift_chat_android.data.remote.dto.DeviceTokenRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
@@ -21,6 +22,7 @@ import javax.inject.Named
 
 class AuthRepositoryImpl @Inject constructor(
     @param:Named("AuthApi") private val authApi: AuthApi,
+    @param:Named("MainAuthApi") private val mainAuthApi: AuthApi,
     private val userApi: UserApi,
     private val secureStorage: SecureStorage,
     private val sessionManager: SessionManager,
@@ -38,6 +40,10 @@ class AuthRepositoryImpl @Inject constructor(
                     refreshToken = result.data.refreshToken
                 )
                 secureStorage.saveUserId(result.data.account.id)
+                // Register FCM token if available
+                secureStorage.getFcmToken()?.let { fcmToken ->
+                    registerDeviceToken(fcmToken)
+                }
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
@@ -53,6 +59,10 @@ class AuthRepositoryImpl @Inject constructor(
                     refreshToken = result.data.refreshToken
                 )
                 secureStorage.saveUserId(result.data.account.id)
+                // Register FCM token if available
+                secureStorage.getFcmToken()?.let { fcmToken ->
+                    registerDeviceToken(fcmToken)
+                }
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
@@ -68,6 +78,10 @@ class AuthRepositoryImpl @Inject constructor(
                     refreshToken = result.data.refreshToken
                 )
                 secureStorage.saveUserId(result.data.account.id)
+                // Register FCM token if available
+                secureStorage.getFcmToken()?.let { fcmToken ->
+                    registerDeviceToken(fcmToken)
+                }
                 NetworkResult.Success(result.data.toAuthUser())
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
@@ -83,6 +97,10 @@ class AuthRepositoryImpl @Inject constructor(
         }
         secureStorage.clearAll()
         sessionManager.logout()
+    }
+
+    override suspend fun registerDeviceToken(token: String): NetworkResult<Unit> {
+        return safeApiCall { mainAuthApi.registerDeviceToken(DeviceTokenRequest(token)) }
     }
 
     override fun isUserLoggedIn(): Boolean {

@@ -15,8 +15,10 @@ import com.thuo_ng.swift_chat_android.domain.repository.NotificationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -45,6 +47,18 @@ class AppViewModel @Inject constructor(
             started = SharingStarted.Eagerly,
             initialValue = AppAuthState.Loading
         )
+
+    private val _pendingConversationId = MutableStateFlow<String?>(null)
+    val pendingConversationId: StateFlow<String?> = _pendingConversationId.asStateFlow()
+
+    fun setPendingConversationId(id: String?) {
+        _pendingConversationId.value = id
+    }
+
+    fun clearPendingConversationId() {
+        _pendingConversationId.value = null
+    }
+
     private val _effect = Channel<AppEffect>(Channel.BUFFERED)
     val effect: Flow<AppEffect> = _effect.receiveAsFlow()
 

@@ -9,6 +9,7 @@ interface AuthRepository {
     suspend fun signup(username: String, email: String, password: String): NetworkResult<AuthUser>
     suspend fun signInWithGoogle(idToken: String): NetworkResult<AuthUser>
     suspend fun logout()
+    suspend fun registerDeviceToken(token: String): NetworkResult<Unit>
     fun isUserLoggedIn(): Boolean
     val isLoggedInFlow: Flow<Boolean>
     suspend fun refreshToken(): NetworkResult<Unit>

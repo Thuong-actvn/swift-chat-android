@@ -25,6 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
@@ -101,20 +103,35 @@ fun MainScreen(
     // Handle deep-link navigation requests coming back from UserProfileScreen
     // via rootNavController's SavedStateHandle.
     val rootCurrentEntry by rootNavController.currentBackStackEntryAsState()
-    LaunchedEffect(rootCurrentEntry) {
-        val handle = rootCurrentEntry?.savedStateHandle ?: return@LaunchedEffect
-        handle.get<String>("navigate_to_chat")?.let { conversationId ->
-            handle.remove<String>("navigate_to_chat")
-            mainNavController.navigate(ChatDetail(conversationId))
+    val rootHandle = rootCurrentEntry?.savedStateHandle
+    
+    val navigateToChatId by rootHandle?.getStateFlow<String?>("navigate_to_chat", null)
+        ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
+    
+    val pendingId by rootHandle?.getStateFlow<String?>("navigate_to_pending_chat_id", null)
+        ?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
+
+    LaunchedEffect(navigateToChatId) {
+        navigateToChatId?.let { conversationId ->
+            rootHandle?.remove<String>("navigate_to_chat")
+            mainNavController.navigate(ChatDetail(conversationId)) {
+                popUpTo(Conversations) { inclusive = false }
+            }
         }
-        val pendingId = handle.get<String>("navigate_to_pending_chat_id")
+    }
+
+    LaunchedEffect(pendingId) {
         if (pendingId != null) {
-            val displayName = handle.get<String>("navigate_to_pending_chat_name") ?: pendingId
-            val avatarUrl = handle.get<String>("navigate_to_pending_chat_avatar")
-            handle.remove<String>("navigate_to_pending_chat_id")
-            handle.remove<String>("navigate_to_pending_chat_name")
-            handle.remove<String>("navigate_to_pending_chat_avatar")
-            mainNavController.navigate(PendingDirectChat(pendingId, displayName, avatarUrl))
+            val displayName = rootHandle?.get<String>("navigate_to_pending_chat_name") ?: pendingId!!
+            val avatarUrl = rootHandle?.get<String>("navigate_to_pending_chat_avatar")
+            
+            rootHandle?.remove<String>("navigate_to_pending_chat_id")
+            rootHandle?.remove<String>("navigate_to_pending_chat_name")
+            rootHandle?.remove<String>("navigate_to_pending_chat_avatar")
+            
+            mainNavController.navigate(PendingDirectChat(pendingId!!, displayName, avatarUrl)) {
+                popUpTo(Conversations) { inclusive = false }
+            }
         }
     }
 
