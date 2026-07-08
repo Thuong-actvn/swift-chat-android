@@ -127,6 +127,7 @@ fun ChatDetailScreen(
     pendingDisplayName: String? = null,
     pendingAvatarUrl: String? = null,
     onBack: () -> Unit,
+    onOpenConversationInfo: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -158,6 +159,7 @@ fun ChatDetailScreen(
         state = state,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
+        onOpenConversationInfo = onOpenConversationInfo,
         onInputChanged = { viewModel.handleIntent(ChatIntent.InputChanged(it)) },
         onInputFocusChanged = { viewModel.handleIntent(ChatIntent.InputFocusChanged(it)) },
         onSendClick = { viewModel.handleIntent(ChatIntent.SendClicked) },
@@ -179,6 +181,7 @@ private fun ChatDetailContent(
     state: ChatUiState,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
+    onOpenConversationInfo: (String) -> Unit,
     onInputChanged: (String) -> Unit,
     onInputFocusChanged: (Boolean) -> Unit,
     onSendClick: () -> Unit,
@@ -231,7 +234,11 @@ private fun ChatDetailContent(
             .background(MaterialTheme.colorScheme.surface)
             .imePadding()
     ) {
-        ChatTopBar(state = state, onBack = onBack)
+        ChatTopBar(
+            state = state,
+            onBack = onBack,
+            onOpenConversationInfo = onOpenConversationInfo
+        )
 
         Box(modifier = Modifier.weight(1f)) {
             MessageList(
@@ -270,7 +277,8 @@ private fun ChatDetailContent(
 @Composable
 private fun ChatTopBar(
     state: ChatUiState,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenConversationInfo: (String) -> Unit
 ) {
     val conversation = state.conversation
     val typingText = state.typingUsers.firstOrNull()?.displayName?.let { "$it is typing..." }
@@ -333,7 +341,13 @@ private fun ChatTopBar(
                 IconButton(onClick = {}, modifier = Modifier.size(38.dp)) {
                     Icon(Icons.Outlined.Call, contentDescription = "Voice call", modifier = Modifier.size(22.dp))
                 }
-                IconButton(onClick = {}, modifier = Modifier.size(38.dp)) {
+                IconButton(
+                    onClick = {
+                        state.conversationId.takeIf { it.isNotBlank() }?.let(onOpenConversationInfo)
+                    },
+                    enabled = state.conversationId.isNotBlank(),
+                    modifier = Modifier.size(38.dp)
+                ) {
                     Icon(Icons.Filled.MoreVert, contentDescription = "More", modifier = Modifier.size(22.dp))
                 }
             }
@@ -1443,6 +1457,7 @@ private fun ChatDetailPreview() {
             ),
             snackbarHostState = remember { SnackbarHostState() },
             onBack = {},
+            onOpenConversationInfo = {},
             onInputChanged = {},
             onInputFocusChanged = {},
             onSendClick = {},

@@ -44,10 +44,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.thuo_ng.swift_chat_android.ui.chat.ChatDetailScreen
+import com.thuo_ng.swift_chat_android.ui.conversationinfo.ConversationInfoScreen
 import com.thuo_ng.swift_chat_android.ui.conversations.ConversationListScreen
 import com.thuo_ng.swift_chat_android.ui.friends.FriendsScreen
 import com.thuo_ng.swift_chat_android.ui.friends.FriendsViewModel
 import com.thuo_ng.swift_chat_android.ui.navigation.ChatDetail
+import com.thuo_ng.swift_chat_android.ui.navigation.ConversationInfo
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
@@ -186,7 +188,10 @@ fun MainScreen(
                 val route = entry.toRoute<ChatDetail>()
                 ChatDetailScreen(
                     conversationId = route.conversationId,
-                    onBack = { mainNavController.popBackStack() }
+                    onBack = { mainNavController.popBackStack() },
+                    onOpenConversationInfo = { conversationId ->
+                        mainNavController.navigate(ConversationInfo(conversationId))
+                    }
                 )
             }
             composable<PendingDirectChat> { entry ->
@@ -195,7 +200,23 @@ fun MainScreen(
                     pendingPartnerId = route.partnerId,
                     pendingDisplayName = route.displayName,
                     pendingAvatarUrl = route.avatarUrl,
-                    onBack = { mainNavController.popBackStack() }
+                    onBack = { mainNavController.popBackStack() },
+                    onOpenConversationInfo = { conversationId ->
+                        mainNavController.navigate(ConversationInfo(conversationId))
+                    }
+                )
+            }
+            composable<ConversationInfo> { entry ->
+                val route = entry.toRoute<ConversationInfo>()
+                ConversationInfoScreen(
+                    conversationId = route.conversationId,
+                    onBack = { mainNavController.popBackStack() },
+                    onConversationClosed = {
+                        mainNavController.navigate(Conversations) {
+                            popUpTo(Conversations) { inclusive = false }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
             composable<Friends> {

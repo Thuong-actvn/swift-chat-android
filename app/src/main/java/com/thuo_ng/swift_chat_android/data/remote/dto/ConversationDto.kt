@@ -13,6 +13,40 @@ data class CreateConversationRequestDto(
     @SerializedName("partnerId") val partnerId: String
 )
 
+data class UpdateGroupInfoRequestDto(
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("avatarUrl") val avatarUrl: String? = null
+)
+
+data class AddConversationMembersRequestDto(
+    @SerializedName("userIds") val userIds: List<String>
+)
+
+data class ChangeMemberRoleRequestDto(
+    @SerializedName("role") val role: String
+)
+
+data class TransferLeadershipRequestDto(
+    @SerializedName("newLeaderId") val newLeaderId: String
+)
+
+data class MuteConversationRequestDto(
+    @SerializedName("duration") val duration: String
+)
+
+data class ConversationActionResponseDto(
+    @SerializedName("success") val success: Boolean = false,
+    @SerializedName("hidden") val hidden: Boolean? = null,
+    @SerializedName("disbanded") val disbanded: Boolean? = null,
+    @SerializedName("added") val added: Int? = null,
+    @SerializedName("userIds") val userIds: List<String>? = null,
+    @SerializedName("removedUserId") val removedUserId: String? = null,
+    @SerializedName("targetUserId") val targetUserId: String? = null,
+    @SerializedName("newRole") val newRole: String? = null,
+    @SerializedName("newLeaderId") val newLeaderId: String? = null,
+    @SerializedName("mutedUntil") val mutedUntil: String? = null
+)
+
 data class ConversationDetailDto(
     @SerializedName("id") val id: String,
     @SerializedName("type") val type: String,
@@ -126,7 +160,8 @@ data class ParticipantPreviewDto(
 
 data class ConversationMemberDto(
     @SerializedName("id") val id: String? = null,
-    @SerializedName("accountId") val accountId: String,
+    @SerializedName("accountId") val accountId: String? = null,
+    @SerializedName("userId") val userId: String? = null,
     @SerializedName("role") val role: String? = null,
     @SerializedName("joinAt") val joinAt: String? = null,
     @SerializedName("joinedAt") val joinedAt: String? = null,

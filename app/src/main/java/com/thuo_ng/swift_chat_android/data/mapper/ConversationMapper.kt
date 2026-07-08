@@ -9,6 +9,7 @@ import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationParticipantDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationMemberDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.displayMessagePreviewContent
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
+import com.thuo_ng.swift_chat_android.domain.model.ConversationMember
 import com.thuo_ng.swift_chat_android.domain.model.CurrentParticipant
 import com.thuo_ng.swift_chat_android.domain.model.DisplayInfo
 import com.thuo_ng.swift_chat_android.domain.model.MessagePreview
@@ -155,17 +156,40 @@ fun List<ConversationMemberDto>.toParticipantPreviewEntities(
     conversationId: String
 ): List<ConversationParticipantPreviewEntity> =
     mapIndexed { index, member ->
+        val accountId = member.normalizedAccountId()
         ConversationParticipantPreviewEntity(
             conversationId = conversationId,
             position = index,
-            accountId = member.accountId,
-            handle = member.handle?.takeIf { it.isNotBlank() } ?: member.accountId,
+            accountId = accountId,
+            handle = member.handle?.takeIf { it.isNotBlank() } ?: accountId,
             displayName = member.displayName?.takeIf { it.isNotBlank() }
                 ?: member.handle?.takeIf { it.isNotBlank() }
-                ?: member.accountId,
+                ?: accountId,
             avatarUrl = member.avatarUrl
         )
     }
+
+fun ConversationMemberDto.toDomain(): ConversationMember {
+    val accountId = normalizedAccountId()
+    return ConversationMember(
+        id = id?.takeIf { it.isNotBlank() } ?: accountId,
+        accountId = accountId,
+        role = role?.takeIf { it.isNotBlank() } ?: "member",
+        joinAt = joinAt ?: joinedAt.orEmpty(),
+        handle = handle?.takeIf { it.isNotBlank() } ?: accountId,
+        displayName = displayName?.takeIf { it.isNotBlank() }
+            ?: handle?.takeIf { it.isNotBlank() }
+            ?: accountId,
+        avatarUrl = avatarUrl
+    )
+}
+
+fun ConversationMemberDto.normalizedAccountId(): String =
+    accountId?.takeIf { it.isNotBlank() }
+        ?: id?.takeIf { it.isNotBlank() }
+        ?: userId?.takeIf { it.isNotBlank() }
+        ?: handle?.takeIf { it.isNotBlank() }
+        ?: ""
 
 fun ConversationWithParticipantPreviews.toDomain(): Conversation =
     Conversation(

@@ -12,14 +12,23 @@ import com.thuo_ng.swift_chat_android.data.local.relation.ConversationWithPartic
 import com.thuo_ng.swift_chat_android.data.mapper.toDomain
 import com.thuo_ng.swift_chat_android.data.mapper.toEntity
 import com.thuo_ng.swift_chat_android.data.mapper.toParticipantPreviewEntities
+import com.thuo_ng.swift_chat_android.data.remote.dto.AddConversationMembersRequestDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.ChangeMemberRoleRequestDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationActionResponseDto
 import com.thuo_ng.swift_chat_android.data.remote.api.ConversationApi
 import com.thuo_ng.swift_chat_android.data.remote.api.MessageApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.ConversationDetailDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.CreateConversationRequestDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.MuteConversationRequestDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.TransferLeadershipRequestDto
+import com.thuo_ng.swift_chat_android.data.remote.dto.UpdateGroupInfoRequestDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.displayMessagePreviewContent
 import com.thuo_ng.swift_chat_android.domain.model.Conversation
+import com.thuo_ng.swift_chat_android.domain.model.ConversationMember
 import com.thuo_ng.swift_chat_android.domain.model.ConversationPage
+import com.thuo_ng.swift_chat_android.domain.model.MuteDuration
 import com.thuo_ng.swift_chat_android.domain.repository.ConversationRepository
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -43,7 +52,9 @@ class ConversationRepositoryImpl @Inject constructor(
         return conversationDao.observeById(conversationId).map { it?.toDomain() }
     }
 
-    override suspend fun syncConversations(): NetworkResult<ConversationPage> {
+    override suspend fun syncConversations(
+        preserveConversationIds: Set<String>
+    ): NetworkResult<ConversationPage> {
         return when (val result = safeApiCall { conversationApi.getConversations() }) {
             is NetworkResult.Success -> {
                 val conversationDtos = result.data.data
@@ -56,10 +67,174 @@ class ConversationRepositoryImpl @Inject constructor(
                     participantPreviews = conversationDtos.flatMap { dto ->
                         dto.toParticipantPreviewEntities()
                             .withLocalAccountIdFallback(localById[dto.id]?.participantPreviews)
-                    }
+                    },
+                    preservedConversationIds = preserveConversationIds
                 )
                 hydrateBlankAttachmentPreviews(serverEntities)
                 NetworkResult.Success(result.data.toDomain())
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun getConversationMembers(conversationId: String): NetworkResult<List<ConversationMember>> {
+        return syncConversationMembers(conversationId)
+    }
+
+    override suspend fun updateGroupInfo(
+        conversationId: String,
+        title: String?,
+        avatarUrl: String?
+    ): NetworkResult<Unit> {
+        return when (val result = safeApiCall {
+            conversationApi.updateGroupInfo(
+                conversationId = conversationId,
+                request = UpdateGroupInfoRequestDto(title = title, avatarUrl = avatarUrl)
+            )
+        }) {
+            is NetworkResult.Success -> {
+                conversationDao.updateGroupInfo(
+                    conversationId = conversationId,
+                    title = title?.takeIf { it.isNotBlank() },
+                    avatarUrl = avatarUrl?.takeIf { it.isNotBlank() },
+                    updatedAt = Instant.now().toString()
+                )
+                NetworkResult.Success(Unit)
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun deleteConversation(conversationId: String): NetworkResult<Unit> {
+        return when (val result = safeApiCall { conversationApi.deleteConversation(conversationId) }) {
+            is NetworkResult.Success -> result.data.asUnitResult("Could not delete conversation")
+                .alsoOnSuccess { conversationDao.deleteConversation(conversationId) }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun addMembers(
+        conversationId: String,
+        userIds: List<String>
+    ): NetworkResult<List<ConversationMember>> {
+        val ids = userIds.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) return getConversationMembers(conversationId)
+
+        return when (val result = safeApiCall {
+            conversationApi.addMembers(
+                conversationId = conversationId,
+                request = AddConversationMembersRequestDto(userIds = ids)
+            )
+        }) {
+            is NetworkResult.Success -> result.data.asMembersRefreshResult(
+                conversationId = conversationId,
+                errorMessage = "Could not add members"
+            )
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun leaveGroup(conversationId: String): NetworkResult<Unit> {
+        return when (val result = safeApiCall { conversationApi.leaveGroup(conversationId) }) {
+            is NetworkResult.Success -> result.data.asUnitResult("Could not leave group")
+                .alsoOnSuccess { conversationDao.deleteConversation(conversationId) }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun kickMember(
+        conversationId: String,
+        accountId: String
+    ): NetworkResult<List<ConversationMember>> {
+        return when (val result = safeApiCall { conversationApi.kickMember(conversationId, accountId) }) {
+            is NetworkResult.Success -> result.data.asMembersRefreshResult(
+                conversationId = conversationId,
+                errorMessage = "Could not remove member"
+            )
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun changeMemberRole(
+        conversationId: String,
+        accountId: String,
+        role: String
+    ): NetworkResult<List<ConversationMember>> {
+        return when (val result = safeApiCall {
+            conversationApi.changeMemberRole(
+                conversationId = conversationId,
+                accountId = accountId,
+                request = ChangeMemberRoleRequestDto(role = role)
+            )
+        }) {
+            is NetworkResult.Success -> result.data.asMembersRefreshResult(
+                conversationId = conversationId,
+                errorMessage = "Could not update member role",
+                refreshList = true
+            )
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun transferLeadership(
+        conversationId: String,
+        newLeaderId: String
+    ): NetworkResult<List<ConversationMember>> {
+        return when (val result = safeApiCall {
+            conversationApi.transferLeadership(
+                conversationId = conversationId,
+                request = TransferLeadershipRequestDto(newLeaderId = newLeaderId)
+            )
+        }) {
+            is NetworkResult.Success -> result.data.asMembersRefreshResult(
+                conversationId = conversationId,
+                errorMessage = "Could not transfer leadership",
+                refreshList = true
+            )
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun muteConversation(
+        conversationId: String,
+        duration: MuteDuration
+    ): NetworkResult<String?> {
+        return when (val result = safeApiCall {
+            conversationApi.muteConversation(
+                conversationId = conversationId,
+                request = MuteConversationRequestDto(duration = duration.apiValue)
+            )
+        }) {
+            is NetworkResult.Success -> {
+                val response = result.data
+                if (!response.success) {
+                    NetworkResult.Error(message = "Could not mute conversation")
+                } else {
+                    conversationDao.updateCurrentParticipantMute(
+                        conversationId = conversationId,
+                        isMuted = true,
+                        mutedUntil = response.mutedUntil
+                    )
+                    NetworkResult.Success(response.mutedUntil)
+                }
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    override suspend fun unmuteConversation(conversationId: String): NetworkResult<Unit> {
+        return when (val result = safeApiCall { conversationApi.unmuteConversation(conversationId) }) {
+            is NetworkResult.Success -> {
+                if (!result.data.success) {
+                    NetworkResult.Error(message = "Could not unmute conversation")
+                } else {
+                    conversationDao.updateCurrentParticipantMute(
+                        conversationId = conversationId,
+                        isMuted = false,
+                        mutedUntil = null
+                    )
+                    NetworkResult.Success(Unit)
+                }
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
@@ -131,6 +306,51 @@ class ConversationRepositoryImpl @Inject constructor(
             }
             gson.fromJson(conversationElement, ConversationDetailDto::class.java)
         }.getOrNull()
+    }
+
+    private suspend fun syncConversationMembers(
+        conversationId: String
+    ): NetworkResult<List<ConversationMember>> {
+        return when (val result = safeApiCall { conversationApi.getConversationMembers(conversationId) }) {
+            is NetworkResult.Success -> {
+                val members = result.data.map { it.toDomain() }
+                conversationDao.replaceParticipantPreviews(
+                    conversationId = conversationId,
+                    participantPreviews = result.data.toParticipantPreviewEntities(conversationId)
+                )
+                conversationDao.updateTotalParticipants(
+                    conversationId = conversationId,
+                    totalParticipants = members.size
+                )
+                NetworkResult.Success(members)
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
+    private suspend fun ConversationActionResponseDto.asMembersRefreshResult(
+        conversationId: String,
+        errorMessage: String,
+        refreshList: Boolean = false
+    ): NetworkResult<List<ConversationMember>> {
+        if (!success) return NetworkResult.Error(message = errorMessage)
+        if (refreshList) syncConversations(preserveConversationIds = setOf(conversationId))
+        return syncConversationMembers(conversationId)
+    }
+
+    private fun ConversationActionResponseDto.asUnitResult(errorMessage: String): NetworkResult<Unit> {
+        return if (success) {
+            NetworkResult.Success(Unit)
+        } else {
+            NetworkResult.Error(message = errorMessage)
+        }
+    }
+
+    private suspend fun NetworkResult<Unit>.alsoOnSuccess(
+        block: suspend () -> Unit
+    ): NetworkResult<Unit> {
+        if (this is NetworkResult.Success) block()
+        return this
     }
 
     private suspend fun hydrateBlankAttachmentPreviews(conversations: List<ConversationEntity>) {

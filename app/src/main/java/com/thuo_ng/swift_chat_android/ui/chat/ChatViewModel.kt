@@ -259,7 +259,9 @@ class ChatViewModel @Inject constructor(
                         start(conversationId, keepPendingUiMessages = true)
                         delay(NEW_DIRECT_SYNC_DELAY_MS)
                     }
-                    conversationRepository.syncConversations()
+                    conversationRepository.syncConversations(
+                        preserveConversationIds = setOf(conversationId)
+                    )
                 }
                 .onFailure { error ->
                     if (shouldBridgePendingDirect && latestPersistedMessages.none { it.clientTempId == clientTempId }) {
@@ -282,7 +284,9 @@ class ChatViewModel @Inject constructor(
                     if (wasPendingDirect) {
                         delay(NEW_DIRECT_SYNC_DELAY_MS)
                     }
-                    conversationRepository.syncConversations()
+                    conversationRepository.syncConversations(
+                        preserveConversationIds = setOf(conversationId)
+                    )
                 }
                 .onFailure { error -> _effect.send(ChatEffect.ShowMessage(error.message ?: "Could not send attachment")) }
         }

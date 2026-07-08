@@ -59,6 +59,30 @@ interface ConversationDao {
     @Query("DELETE FROM conversations WHERE id NOT IN (:conversationIds)")
     suspend fun deleteConversationsNotIn(conversationIds: List<String>)
 
+    @Query(
+        """
+        SELECT id FROM conversations
+        WHERE LOWER(type) = 'direct'
+            AND lastMessageId IS NOT NULL
+        """
+    )
+    suspend fun getRetainableDirectConversationIds(): List<String>
+
+    @Query("DELETE FROM conversations WHERE id NOT IN (:preservedConversationIds)")
+    suspend fun deleteConversationsExceptPreserved(preservedConversationIds: List<String>)
+
+    @Query(
+        """
+        DELETE FROM conversations
+        WHERE id NOT IN (:conversationIds)
+            AND id NOT IN (:preservedConversationIds)
+        """
+    )
+    suspend fun deleteConversationsNotInAndNotPreserved(
+        conversationIds: List<String>,
+        preservedConversationIds: List<String>
+    )
+
     @Query("DELETE FROM conversations WHERE id = :conversationId")
     suspend fun deleteConversation(conversationId: String)
 
@@ -76,6 +100,26 @@ interface ConversationDao {
         title: String?,
         avatarUrl: String?,
         updatedAt: String
+    )
+
+    @Query(
+        """
+        UPDATE conversations SET
+            currentParticipantIsMuted = :isMuted,
+            currentParticipantMutedUntil = :mutedUntil
+        WHERE id = :conversationId
+        """
+    )
+    suspend fun updateCurrentParticipantMute(
+        conversationId: String,
+        isMuted: Boolean,
+        mutedUntil: String?
+    )
+
+    @Query("UPDATE conversations SET totalParticipants = :totalParticipants WHERE id = :conversationId")
+    suspend fun updateTotalParticipants(
+        conversationId: String,
+        totalParticipants: Int
     )
 
     @Query(
@@ -130,17 +174,29 @@ interface ConversationDao {
     @Transaction
     suspend fun replaceAll(
         conversations: List<ConversationEntity>,
-        participantPreviews: List<ConversationParticipantPreviewEntity>
+        participantPreviews: List<ConversationParticipantPreviewEntity>,
+        preservedConversationIds: Set<String> = emptySet()
     ) {
         val conversationIds = conversations.map { it.id }
+        val preservedIds = (preservedConversationIds + getRetainableDirectConversationIds())
+            .filter { it.isNotBlank() }
+            .distinct()
         if (conversationIds.isEmpty()) {
-            clearParticipantPreviews()
-            clearConversations()
+            if (preservedIds.isEmpty()) {
+                clearParticipantPreviews()
+                clearConversations()
+            } else {
+                deleteConversationsExceptPreserved(preservedIds)
+            }
             return
         }
 
         clearParticipantPreviews(conversationIds)
-        deleteConversationsNotIn(conversationIds)
+        if (preservedIds.isEmpty()) {
+            deleteConversationsNotIn(conversationIds)
+        } else {
+            deleteConversationsNotInAndNotPreserved(conversationIds, preservedIds)
+        }
         upsertConversations(conversations)
         if (participantPreviews.isNotEmpty()) {
             upsertParticipantPreviews(participantPreviews)

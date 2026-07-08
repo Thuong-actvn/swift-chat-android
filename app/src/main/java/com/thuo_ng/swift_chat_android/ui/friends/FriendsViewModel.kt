@@ -121,18 +121,22 @@ class FriendsViewModel @Inject constructor(
 
         viewModelScope.launch {
             addAction(actionKey)
-            when (val result = conversationRepository.findDirectConversationWith(intent.accountId)) {
+            when (val result = conversationRepository.openOrCreateDirectConversation(intent.accountId)) {
                 is NetworkResult.Success -> {
-                    val conversation = result.data
-                    if (conversation != null) {
-                        _effect.send(FriendsEffect.OpenConversation(conversation.id))
-                    } else {
-                        _effect.send(intent.toPendingDirectEffect())
-                    }
+                    _effect.send(FriendsEffect.OpenConversation(result.data.id))
                 }
                 is NetworkResult.Error -> {
-                    _effect.send(FriendsEffect.ShowMessage(result.message))
-                    _effect.send(intent.toPendingDirectEffect())
+                    val localConversation = when (
+                        val localResult = conversationRepository.findDirectConversationWith(intent.accountId)
+                    ) {
+                        is NetworkResult.Success -> localResult.data
+                        is NetworkResult.Error -> null
+                    }
+                    if (localConversation != null) {
+                        _effect.send(FriendsEffect.OpenConversation(localConversation.id))
+                    } else {
+                        _effect.send(FriendsEffect.ShowMessage(result.message))
+                    }
                 }
             }
             removeAction(actionKey)

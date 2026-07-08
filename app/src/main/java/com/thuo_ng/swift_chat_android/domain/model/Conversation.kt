@@ -47,3 +47,23 @@ data class MessagePreview(
     val timestamp: String,
     val type: String // "text", "image", etc.
 )
+
+data class ConversationMember(
+    val id: String,
+    val accountId: String,
+    val role: String,
+    val joinAt: String,
+    val handle: String,
+    val displayName: String,
+    val avatarUrl: String?
+) {
+    val displayLabel: String
+        get() = displayName.takeIf { it.isNotBlank() } ?: handle
+}
+
+enum class MuteDuration(val apiValue: String, val label: String) {
+    OneHour("1h", "1 hour"),
+    EightHours("8h", "8 hours"),
+    OneDay("24h", "24 hours"),
+    Forever("forever", "Forever")
+}
