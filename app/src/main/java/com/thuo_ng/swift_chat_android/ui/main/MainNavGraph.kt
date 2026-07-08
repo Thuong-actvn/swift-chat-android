@@ -8,8 +8,10 @@ import com.thuo_ng.swift_chat_android.ui.navigation.AuthGraph
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.MainGraph
 import com.thuo_ng.swift_chat_android.ui.navigation.UserProfile
+import com.thuo_ng.swift_chat_android.ui.navigation.CreateGroup
 import com.thuo_ng.swift_chat_android.ui.profile.edit.EditProfileScreen
 import com.thuo_ng.swift_chat_android.ui.userprofile.UserProfileScreen
+import com.thuo_ng.swift_chat_android.ui.creategroup.CreateGroupScreen
 
 
 fun NavGraphBuilder.mainGraph(rootNavController: NavController) {
@@ -54,6 +56,19 @@ fun NavGraphBuilder.mainGraph(rootNavController: NavController) {
             },
             onNavigateToEditProfile = {
                 rootNavController.navigate(EditProfile)
+            }
+        )
+    }
+
+    composable<CreateGroup> {
+        CreateGroupScreen(
+            onBack = { rootNavController.popBackStack() },
+            onNavigateToConversation = { conversationId ->
+                if (rootNavController.popBackStack()) {
+                    rootNavController.currentBackStackEntry
+                        ?.savedStateHandle
+                        ?.set("navigate_to_chat", conversationId)
+                }
             }
         )
     }

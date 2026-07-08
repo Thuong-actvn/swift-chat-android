@@ -29,4 +29,5 @@ interface ConversationRepository {
     suspend fun unmuteConversation(conversationId: String): NetworkResult<Unit>
     suspend fun findDirectConversationWith(accountId: String): NetworkResult<Conversation?>
     suspend fun openOrCreateDirectConversation(accountId: String): NetworkResult<Conversation>
+    suspend fun createGroup(title: String, userIds: List<String>): NetworkResult<Conversation>
 }

@@ -268,6 +268,38 @@ class ConversationRepositoryImpl @Inject constructor(
         return createDirectConversation(accountId)
     }
 
+    override suspend fun createGroup(title: String, userIds: List<String>): NetworkResult<Conversation> {
+        val request = CreateConversationRequestDto(
+            type = "group",
+            title = title,
+            memberIds = userIds
+        )
+
+        return when (val result = safeApiCall { conversationApi.createConversation(request) }) {
+            is NetworkResult.Success -> {
+                val conversationDetail = parseConversationDetail(result.data)
+                    ?: return NetworkResult.Error(message = "Could not create group")
+                val currentAccountId = secureStorage.getUserId()
+
+                conversationDao.upsertConversation(
+                    conversationDetail.toEntity(
+                        currentAccountId = currentAccountId
+                    )
+                )
+                conversationDao.replaceParticipantPreviews(
+                    conversationId = conversationDetail.id,
+                    participantPreviews = conversationDetail.toParticipantPreviewEntities()
+                )
+                NetworkResult.Success(
+                    conversationDetail.toDomain(
+                        currentAccountId = currentAccountId
+                    )
+                )
+            }
+            is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
+        }
+    }
+
     private suspend fun createDirectConversation(accountId: String): NetworkResult<Conversation> {
         val request = CreateConversationRequestDto(
             type = "direct",

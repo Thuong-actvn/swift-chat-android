@@ -51,6 +51,7 @@ import com.thuo_ng.swift_chat_android.ui.friends.FriendsScreen
 import com.thuo_ng.swift_chat_android.ui.friends.FriendsViewModel
 import com.thuo_ng.swift_chat_android.ui.navigation.ChatDetail
 import com.thuo_ng.swift_chat_android.ui.navigation.ConversationInfo
+import com.thuo_ng.swift_chat_android.ui.navigation.CreateGroup
 import com.thuo_ng.swift_chat_android.ui.navigation.Conversations
 import com.thuo_ng.swift_chat_android.ui.navigation.EditProfile
 import com.thuo_ng.swift_chat_android.ui.navigation.Friends
@@ -203,6 +204,9 @@ fun MainScreen(
                 ConversationListScreen(
                     onConversationClick = { conversationId ->
                         mainNavController.navigate(ChatDetail(conversationId))
+                    },
+                    onNewConversationClick = {
+                        rootNavController.navigate(CreateGroup)
                     }
                 )
             }

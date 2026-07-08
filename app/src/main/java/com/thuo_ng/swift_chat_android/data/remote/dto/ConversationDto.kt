@@ -10,7 +10,9 @@ import com.thuo_ng.swift_chat_android.domain.model.ParticipantPreview
 
 data class CreateConversationRequestDto(
     @SerializedName("type") val type: String,
-    @SerializedName("partnerId") val partnerId: String
+    @SerializedName("partnerId") val partnerId: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("memberIds") val memberIds: List<String>? = null
 )
 
 data class UpdateGroupInfoRequestDto(

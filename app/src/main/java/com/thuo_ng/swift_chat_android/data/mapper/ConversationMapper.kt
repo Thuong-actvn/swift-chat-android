@@ -55,9 +55,10 @@ fun ConversationDto.toParticipantPreviewEntities(): List<ConversationParticipant
 
 fun ConversationDetailDto.toEntity(
     currentAccountId: String?,
-    partnerAccountId: String
+    partnerAccountId: String? = null
 ): ConversationEntity {
-    val partner = directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
+    val partner = if (type.equals("group", ignoreCase = true)) null 
+                 else directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
     val currentParticipant = participants.firstOrNull { it.accountId == currentAccountId }
     return ConversationEntity(
         id = id,
@@ -99,9 +100,10 @@ fun ConversationDetailDto.toParticipantPreviewEntities(): List<ConversationParti
 
 fun ConversationDetailDto.toDomain(
     currentAccountId: String?,
-    partnerAccountId: String
+    partnerAccountId: String? = null
 ): Conversation {
-    val partner = directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
+    val partner = if (type.equals("group", ignoreCase = true)) null 
+                 else directPartner(currentAccountId = currentAccountId, partnerAccountId = partnerAccountId)
     val currentParticipant = participants.firstOrNull { it.accountId == currentAccountId }
     return Conversation(
         id = id,
@@ -130,9 +132,9 @@ fun ConversationDetailDto.toDomain(
 
 private fun ConversationDetailDto.directPartner(
     currentAccountId: String?,
-    partnerAccountId: String
+    partnerAccountId: String?
 ): ConversationParticipantDto? {
-    return participants.firstOrNull { it.accountId == partnerAccountId }
+    return (partnerAccountId?.let { id -> participants.firstOrNull { it.accountId == id } })
         ?: participants.firstOrNull { it.accountId != currentAccountId }
         ?: participants.firstOrNull()
 }

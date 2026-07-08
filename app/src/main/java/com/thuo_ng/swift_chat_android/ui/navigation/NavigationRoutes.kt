@@ -27,3 +27,4 @@ import kotlinx.serialization.Serializable
 // ── Root routes (Full screen) ────────────────────────────
 @Serializable object EditProfile
 @Serializable data class UserProfile(val userId: String)
+@Serializable object CreateGroup

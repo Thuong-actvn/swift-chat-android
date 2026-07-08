@@ -65,6 +65,7 @@ fun SwiftAvatar(
     sizes: SwiftAvatarSizes = SwiftAvatarDefaults.Medium,
     showOnlineIndicator: Boolean = false,
     showEditBadge: Boolean = false,
+    placeholderIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Person,
     onClick: (() -> Unit)? = null,
     onEditClick: (() -> Unit)? = null
 ) {
@@ -86,6 +87,7 @@ fun SwiftAvatar(
             val state = painter.state
             if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Error || state is AsyncImagePainter.State.Empty) {
                 DefaultAvatarPlaceholder(
+                    icon = placeholderIcon,
                     iconModifier = Modifier
                         .fillMaxSize()
                         .padding(sizes.avatar / 6)
@@ -134,6 +136,7 @@ fun SwiftAvatar(
 @Composable
 fun DefaultAvatarPlaceholder(
     modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Person,
     iconModifier: Modifier = Modifier
 ) {
     Box(
@@ -141,7 +144,7 @@ fun DefaultAvatarPlaceholder(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Person,
+            imageVector = icon,
             contentDescription = null,
             modifier = iconModifier,
             tint = MaterialTheme.colorScheme.outline
