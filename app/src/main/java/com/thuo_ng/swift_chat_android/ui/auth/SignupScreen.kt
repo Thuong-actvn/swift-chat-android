@@ -32,7 +32,6 @@ import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 @Composable
 fun SignupScreen(
     onNavigateToSignIn: () -> Unit,
-    onEffect: (AuthEffect) -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -42,8 +41,6 @@ fun SignupScreen(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                is AuthEffect.NavigateToMain -> onEffect(effect)
-                is AuthEffect.NavigateToSignIn -> { /* không cần xử lý ở đây */ }
                 is AuthEffect.ShowError -> {
                     Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 }

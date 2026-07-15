@@ -39,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,19 +64,9 @@ import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 @Composable
 fun ProfileScreen(
     onNavigateToEditProfile: () -> Unit,
-    onLogout: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-
-    LaunchedEffect(Unit) {
-        viewModel.effect.collect { effect ->
-            when (effect) {
-                is ProfileEffect.NavigateToEditProfile -> onNavigateToEditProfile()
-                is ProfileEffect.NavigateToLogin -> onLogout()
-            }
-        }
-    }
 
     Scaffold(
         topBar = {

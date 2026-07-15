@@ -54,10 +54,12 @@ fun AppNavGraph(
         when (authState) {
             AppAuthState.Loading -> Unit
             AppAuthState.Authenticated -> rootNavController.navigate(MainGraph) {
-                popUpTo(SplashRoute) { inclusive = true }
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
             }
             AppAuthState.Unauthenticated -> rootNavController.navigate(AuthGraph) {
-                popUpTo(SplashRoute) { inclusive = true }
+                popUpTo(0) { inclusive = true }
+                launchSingleTop = true
             }
         }
     }

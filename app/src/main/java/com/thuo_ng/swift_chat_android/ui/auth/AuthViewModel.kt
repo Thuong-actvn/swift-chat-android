@@ -110,7 +110,6 @@ class AuthViewModel @Inject constructor(
             when (val result = authRepository.signIn(state.username, state.password)) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(isLoading = false) }
-                    _effect.send(AuthEffect.NavigateToMain)
                 }
                 is NetworkResult.Error -> {
                     _uiState.update { it.copy(isLoading = false) }
@@ -148,7 +147,6 @@ class AuthViewModel @Inject constructor(
             when (val result = authRepository.signup( state.username, state.email, state.password)) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(isLoading = false) }
-                    _effect.send(AuthEffect.NavigateToMain)
                 }
                 is NetworkResult.Error -> {
                     _uiState.update { it.copy(isLoading = false) }
@@ -168,7 +166,6 @@ class AuthViewModel @Inject constructor(
                     when (val result = authRepository.signInWithGoogle(idToken)) {
                         is NetworkResult.Success -> {
                             _uiState.update { it.copy(isLoading = false) }
-                            _effect.send(AuthEffect.NavigateToMain)
                         }
                         is NetworkResult.Error -> {
                             _uiState.update { it.copy(isLoading = false) }

@@ -13,9 +13,3 @@ sealed class ProfileIntent {
     object LogoutClicked : ProfileIntent()
     // TODO: Add intents for other settings menu clicks later
 }
-
-// Effect
-sealed class ProfileEffect {
-    object NavigateToEditProfile : ProfileEffect()
-    object NavigateToLogin : ProfileEffect()
-}

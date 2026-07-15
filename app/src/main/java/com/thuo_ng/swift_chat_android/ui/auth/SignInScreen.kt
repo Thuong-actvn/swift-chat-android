@@ -26,18 +26,12 @@ import com.thuo_ng.swift_chat_android.ui.components.*
 import com.thuo_ng.swift_chat_android.ui.theme.SwiftChatTheme
 
 /**
- * SignInScreen — không nhận callback navigation trực tiếp.
- *
- * Thay vào đó, [onEffect] relay AuthEffect lên NavGraph để xử lý navigate.
- * Screen chỉ quan tâm đến việc hiển thị UI và gửi Intent.
- *
- * [onNavigateToSignUp] giữ lại vì đây là điều hướng cùng graph (auth → auth),
- * không phải side-effect từ ViewModel.
+ * Root navigation is driven by AppViewModel's persisted auth state.
+ * This screen only handles its UI, errors, and navigation within AuthGraph.
  */
 @Composable
 fun SignInScreen(
     onNavigateToSignUp: () -> Unit,
-    onEffect: (AuthEffect) -> Unit,
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -47,8 +41,6 @@ fun SignInScreen(
     LaunchedEffect(Unit) {
         viewModel.effect.collect { effect ->
             when (effect) {
-                is AuthEffect.NavigateToMain -> onEffect(effect)
-                is AuthEffect.NavigateToSignIn -> { /* không cần xử lý ở đây */ }
                 is AuthEffect.ShowError -> {
                     Toast.makeText(context, effect.message, Toast.LENGTH_LONG).show()
                 }

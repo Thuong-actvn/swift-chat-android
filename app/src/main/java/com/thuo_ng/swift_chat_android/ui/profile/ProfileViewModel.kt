@@ -1,17 +1,16 @@
 package com.thuo_ng.swift_chat_android.ui.profile
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.thuo_ng.swift_chat_android.domain.repository.AuthRepository
 import com.thuo_ng.swift_chat_android.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,9 +22,6 @@ class ProfileViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
-
-    private val _effect = Channel<ProfileEffect>(Channel.BUFFERED)
-    val effect: Flow<ProfileEffect> = _effect.receiveAsFlow()
 
     init {
         observeUser()
@@ -61,9 +57,14 @@ class ProfileViewModel @Inject constructor(
     private fun logout() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            userRepository.clearCurrentUser()
+            try {
+                userRepository.clearCurrentUser()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "Failed to clear cached user during logout", e)
+            }
             authRepository.logout()
-            _effect.send(ProfileEffect.NavigateToLogin)
         }
     }
 }

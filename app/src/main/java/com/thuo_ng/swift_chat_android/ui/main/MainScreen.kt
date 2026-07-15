@@ -68,8 +68,7 @@ private val tabs = listOf(
 
 @Composable
 fun MainScreen(
-    rootNavController: NavController,
-    onLogout: () -> Unit
+    rootNavController: NavController
 ) {
     val mainNavController = rememberNavController()
     val navBackStackEntry by mainNavController.currentBackStackEntryAsState()
@@ -153,8 +152,7 @@ fun MainScreen(
             }
             composable<Profile> {
                 ProfileScreen(
-                    onNavigateToEditProfile = { rootNavController.navigate(EditProfile) },
-                    onLogout = onLogout
+                    onNavigateToEditProfile = { rootNavController.navigate(EditProfile) }
                 )
             }
         }
@@ -186,8 +184,7 @@ private fun PlaceholderTab(title: String, subtitle: String) {
 fun MainScreenPreview() {
     SwiftChatTheme {
         MainScreen(
-            rootNavController = rememberNavController(),
-            onLogout = {}
+            rootNavController = rememberNavController()
         )
     }
 }

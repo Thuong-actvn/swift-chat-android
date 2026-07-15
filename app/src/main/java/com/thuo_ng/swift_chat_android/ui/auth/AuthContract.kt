@@ -64,7 +64,5 @@ sealed class AuthIntent {
 // Side-effect một lần, phát qua Channel.
 
 sealed class AuthEffect {
-    object NavigateToMain : AuthEffect()
-    object NavigateToSignIn : AuthEffect()
     data class ShowError(val message: String) : AuthEffect()
 }
