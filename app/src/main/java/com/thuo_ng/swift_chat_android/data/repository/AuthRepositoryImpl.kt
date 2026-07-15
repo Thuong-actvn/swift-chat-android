@@ -1,11 +1,10 @@
 package com.thuo_ng.swift_chat_android.data.repository
 
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
-import com.thuo_ng.swift_chat_android.core.session.SessionManager
+import com.thuo_ng.swift_chat_android.core.network.TokenRefreshManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
-import com.thuo_ng.swift_chat_android.data.remote.api.UserApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignInRequest
@@ -20,23 +19,23 @@ import javax.inject.Named
 
 class AuthRepositoryImpl @Inject constructor(
     @param:Named("AuthApi") private val authApi: AuthApi,
-    private val userApi: UserApi,
     private val secureStorage: SecureStorage,
-    private val sessionManager: SessionManager
+    private val tokenRefreshManager: TokenRefreshManager
 ) : AuthRepository {
 
-    override val isLoggedInFlow: Flow<Boolean> = secureStorage.tokenFlow.map { it != null }
+    override val isLoggedInFlow: Flow<Boolean> = secureStorage.tokenFlow.map { !it.isNullOrBlank() }
 
     override suspend fun signIn(username: String, password: String): NetworkResult<AuthUser> {
         val result = safeApiCall { authApi.signIn(SignInRequest(username, password)) }
         return when (result) {
             is NetworkResult.Success -> {
-                secureStorage.saveTokens(
+                val saved = tokenRefreshManager.establishSession(
                     accessToken = result.data.accessToken,
-                    refreshToken = result.data.refreshToken
+                    refreshToken = result.data.refreshToken,
+                    userId = result.data.account.id
                 )
-                secureStorage.saveUserId(result.data.account.id)
-                NetworkResult.Success(result.data.toAuthUser())
+                if (saved) NetworkResult.Success(result.data.toAuthUser())
+                else NetworkResult.Error(null, "Server returned an invalid session")
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
@@ -46,12 +45,13 @@ class AuthRepositoryImpl @Inject constructor(
         val result = safeApiCall { authApi.signup(SignupRequest(username, email, password)) }
         return when (result) {
             is NetworkResult.Success -> {
-                secureStorage.saveTokens(
+                val saved = tokenRefreshManager.establishSession(
                     accessToken = result.data.accessToken,
-                    refreshToken = result.data.refreshToken
+                    refreshToken = result.data.refreshToken,
+                    userId = result.data.account.id
                 )
-                secureStorage.saveUserId(result.data.account.id)
-                NetworkResult.Success(result.data.toAuthUser())
+                if (saved) NetworkResult.Success(result.data.toAuthUser())
+                else NetworkResult.Error(null, "Server returned an invalid session")
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
@@ -61,29 +61,33 @@ class AuthRepositoryImpl @Inject constructor(
         val result = safeApiCall { authApi.googleLogin(GoogleLoginRequest(idToken)) }
         return when (result) {
             is NetworkResult.Success -> {
-                secureStorage.saveTokens(
+                val saved = tokenRefreshManager.establishSession(
                     accessToken = result.data.accessToken,
-                    refreshToken = result.data.refreshToken
+                    refreshToken = result.data.refreshToken,
+                    userId = result.data.account.id
                 )
-                secureStorage.saveUserId(result.data.account.id)
-                NetworkResult.Success(result.data.toAuthUser())
+                if (saved) NetworkResult.Success(result.data.toAuthUser())
+                else NetworkResult.Error(null, "Server returned an invalid session")
             }
             is NetworkResult.Error -> NetworkResult.Error(result.code, result.message)
         }
     }
 
     override suspend fun logout() {
-        val refreshToken = secureStorage.getRefreshToken()
-        if (!refreshToken.isNullOrEmpty()) {
-            safeApiCall { 
-                userApi.logout(LogoutRequest(refreshToken))
-            }
+        tokenRefreshManager.logoutCurrentSession { refreshToken ->
+            authApi.logout(LogoutRequest(refreshToken))
         }
-        secureStorage.clearAll()
-        sessionManager.logout()
     }
 
     override fun isUserLoggedIn(): Boolean {
         return !secureStorage.getAccessToken().isNullOrEmpty()
+    }
+
+    override suspend fun refreshToken(): NetworkResult<Unit> {
+        return if (tokenRefreshManager.refreshAccessToken()) {
+            NetworkResult.Success(Unit)
+        } else {
+            NetworkResult.Error(401, "Unable to refresh token")
+        }
     }
 }

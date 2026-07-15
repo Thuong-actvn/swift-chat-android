@@ -41,13 +41,16 @@ class SecureStorage @Inject constructor(
 
     private val _userIdFlow = MutableStateFlow(sharedPreferences.getString(KEY_USER_ID, null))
     val userIdFlow: StateFlow<String?> = _userIdFlow.asStateFlow()
-    
+
     @Synchronized
-    fun saveTokens(accessToken: String, refreshToken: String) {
+    fun saveSession(accessToken: String, refreshToken: String, userId: String) {
         sharedPreferences.edit {
             putString(KEY_ACCESS_TOKEN, accessToken)
-                .putString(KEY_REFRESH_TOKEN, refreshToken)
+            putString(KEY_REFRESH_TOKEN, refreshToken)
+            putString(KEY_USER_ID, userId)
         }
+        // Publish user data first; the access-token emission is the auth-state boundary.
+        _userIdFlow.value = userId
         _tokenFlow.value = accessToken
     }
 
@@ -76,7 +79,7 @@ class SecureStorage @Inject constructor(
     @Synchronized
     fun clearAll() {
         sharedPreferences.edit { clear() }
-        _tokenFlow.value = null
         _userIdFlow.value = null
+        _tokenFlow.value = null
     }
 }

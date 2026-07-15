@@ -1,6 +1,5 @@
 package com.thuo_ng.swift_chat_android.data.remote.api
 
-import com.thuo_ng.swift_chat_android.data.remote.dto.LogoutRequest
 import com.thuo_ng.swift_chat_android.data.remote.dto.UpdateProfileDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.UploadResponseDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.UserResponseDto
@@ -11,11 +10,6 @@ import retrofit2.http.*
 interface UserApi {
     @GET("api/v1/users/me")
     suspend fun getCurrentUser(): UserResponseDto
-
-    @POST("api/v1/auth/logout")
-    suspend fun logout(
-        @Body request: LogoutRequest
-    ): Response<Unit>
 
     @PATCH("api/v1/users/me")
     suspend fun updateProfile(
