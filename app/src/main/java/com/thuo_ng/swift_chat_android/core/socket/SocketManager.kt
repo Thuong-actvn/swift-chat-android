@@ -39,6 +39,7 @@ class SocketManager @Inject constructor(
     private var socket: Socket? = null
     private var activeToken: String? = null
     private var isRefreshingToken = false
+    private var started = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var heartbeatJob: Job? = null
 
@@ -53,7 +54,10 @@ class SocketManager @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     // ── App Foreground/Background Lifecycle ─────────────────────
-    init {
+    @Synchronized
+    fun start() {
+        if (started) return
+        started = true
         Log.d(TAG, "Initializing SocketManager and registering process lifecycle observer")
         observeAppLifecycle()
         observeTokenChanges()

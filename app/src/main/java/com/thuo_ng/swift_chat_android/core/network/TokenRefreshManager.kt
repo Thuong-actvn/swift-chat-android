@@ -1,11 +1,16 @@
 package com.thuo_ng.swift_chat_android.core.network
 
+import android.util.Base64
 import com.thuo_ng.swift_chat_android.core.session.SessionManager
+import com.thuo_ng.swift_chat_android.core.session.SessionRestoreResult
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.RefreshTokenRequest
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Provider
@@ -17,6 +22,12 @@ class TokenRefreshManager @Inject constructor(
     private val sessionManager: SessionManager,
     @param:Named("AuthApi") private val authApiProvider: Provider<AuthApi>
 ) {
+    private enum class RefreshResult {
+        Success,
+        InvalidSession,
+        TemporaryFailure
+    }
+
     private val mutex = Mutex()
 
     suspend fun establishSession(
@@ -49,28 +60,55 @@ class TokenRefreshManager @Inject constructor(
         if (refreshToken != null) {
             try {
                 revokeSession(refreshToken)
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 // The device is already logged out locally; an offline revoke cannot block it.
             }
         }
     }
 
+    suspend fun restoreSession(): SessionRestoreResult {
+        val currentToken = secureStorage.getAccessToken()
+        if (currentToken.isNullOrBlank()) {
+            return SessionRestoreResult.Unauthenticated
+        }
+        if (!isAccessTokenExpired(currentToken)) {
+            return SessionRestoreResult.Authenticated
+        }
+
+        return when (refreshAccessTokenResult(currentToken)) {
+            RefreshResult.Success -> SessionRestoreResult.Authenticated
+            RefreshResult.InvalidSession -> SessionRestoreResult.Unauthenticated
+            RefreshResult.TemporaryFailure -> {
+                // There is no offline/retry flow during startup yet. Remove the expired
+                // local session so it cannot be exposed as authenticated.
+                secureStorage.clearAll()
+                SessionRestoreResult.TemporaryFailure
+            }
+        }
+    }
+
     suspend fun refreshAccessToken(requestToken: String? = null): Boolean {
+        return refreshAccessTokenResult(requestToken) == RefreshResult.Success
+    }
+
+    private suspend fun refreshAccessTokenResult(requestToken: String?): RefreshResult {
         return mutex.withLock {
             val currentToken = secureStorage.getAccessToken()
             if (requestToken != null && currentToken == null) {
                 // The session was cleared while this refresh request was waiting for the lock.
-                return@withLock false
+                return@withLock RefreshResult.InvalidSession
             }
             if (requestToken != null && currentToken != null && currentToken != requestToken) {
-                return@withLock true
+                return@withLock RefreshResult.Success
             }
 
             val currentRefreshToken = secureStorage.getRefreshToken()
             if (currentRefreshToken.isNullOrEmpty()) {
                 secureStorage.clearAll()
                 sessionManager.expireSession()
-                return@withLock false
+                return@withLock RefreshResult.InvalidSession
             }
 
             try {
@@ -86,7 +124,7 @@ class TokenRefreshManager @Inject constructor(
                         ) {
                             secureStorage.clearAll()
                             sessionManager.expireSession()
-                            return@withLock false
+                            return@withLock RefreshResult.InvalidSession
                         }
 
                         secureStorage.saveSession(
@@ -94,22 +132,46 @@ class TokenRefreshManager @Inject constructor(
                             refreshToken = body.refreshToken,
                             userId = body.account.id
                         )
-                        return@withLock true
+                        return@withLock RefreshResult.Success
                     }
 
                     secureStorage.clearAll()
                     sessionManager.expireSession()
-                    return@withLock false
+                    return@withLock RefreshResult.InvalidSession
                 }
 
                 if (response.code() == 401 || response.code() == 403) {
                     secureStorage.clearAll()
                     sessionManager.expireSession()
+                    return@withLock RefreshResult.InvalidSession
                 }
-                false
+                RefreshResult.TemporaryFailure
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: IOException) {
+                // Network unavailable — the session is kept intact.
+                // TokenAuthenticator will retry the refresh on the next API call.
+                RefreshResult.TemporaryFailure
             } catch (_: Exception) {
-                false
+                RefreshResult.TemporaryFailure
             }
+        }
+    }
+
+    private fun isAccessTokenExpired(accessToken: String): Boolean {
+        return try {
+            val payload = accessToken.split('.').getOrNull(1) ?: return true
+            val decodedPayload = Base64.decode(
+                payload,
+                Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+            ).toString(Charsets.UTF_8)
+            val expiresAt = JSONObject(decodedPayload).optLong("exp", -1L)
+            if (expiresAt <= 0L) return true
+
+            expiresAt <= System.currentTimeMillis() / 1_000L
+        } catch (_: Exception) {
+            // Unknown token format cannot be considered safely reusable.
+            true
         }
     }
 }

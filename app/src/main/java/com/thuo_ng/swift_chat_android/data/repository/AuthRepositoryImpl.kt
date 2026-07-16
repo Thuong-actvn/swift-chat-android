@@ -3,6 +3,7 @@ package com.thuo_ng.swift_chat_android.data.repository
 import com.thuo_ng.swift_chat_android.core.network.NetworkResult
 import com.thuo_ng.swift_chat_android.core.network.TokenRefreshManager
 import com.thuo_ng.swift_chat_android.core.network.safeApiCall
+import com.thuo_ng.swift_chat_android.core.session.SessionRestoreResult
 import com.thuo_ng.swift_chat_android.core.storage.SecureStorage
 import com.thuo_ng.swift_chat_android.data.remote.api.AuthApi
 import com.thuo_ng.swift_chat_android.data.remote.dto.GoogleLoginRequest
@@ -79,15 +80,7 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun isUserLoggedIn(): Boolean {
-        return !secureStorage.getAccessToken().isNullOrEmpty()
-    }
-
-    override suspend fun refreshToken(): NetworkResult<Unit> {
-        return if (tokenRefreshManager.refreshAccessToken()) {
-            NetworkResult.Success(Unit)
-        } else {
-            NetworkResult.Error(401, "Unable to refresh token")
-        }
+    override suspend fun restoreSession(): SessionRestoreResult {
+        return tokenRefreshManager.restoreSession()
     }
 }

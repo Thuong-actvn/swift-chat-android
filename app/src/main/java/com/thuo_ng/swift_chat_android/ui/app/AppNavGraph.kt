@@ -20,6 +20,7 @@ import kotlinx.serialization.Serializable
 
 
 
+@Serializable data object RootGraph
 @Serializable data object SplashRoute
 @Composable
 fun AppNavGraph(
@@ -43,6 +44,7 @@ fun AppNavGraph(
     NavHost(
         navController = rootNavController,
         startDestination = SplashRoute,
+        route = RootGraph::class,
         modifier = Modifier.fillMaxSize()
     ) {
         composable<SplashRoute> {}
@@ -54,11 +56,11 @@ fun AppNavGraph(
         when (authState) {
             AppAuthState.Loading -> Unit
             AppAuthState.Authenticated -> rootNavController.navigate(MainGraph) {
-                popUpTo(0) { inclusive = true }
+                popUpTo<RootGraph> { inclusive = true }
                 launchSingleTop = true
             }
             AppAuthState.Unauthenticated -> rootNavController.navigate(AuthGraph) {
-                popUpTo(0) { inclusive = true }
+                popUpTo<RootGraph> { inclusive = true }
                 launchSingleTop = true
             }
         }
