@@ -9,6 +9,7 @@ import com.thuo_ng.swift_chat_android.data.remote.dto.RefreshTokenResponseDto
 import com.thuo_ng.swift_chat_android.data.remote.dto.SignupRequest
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.Header
 import retrofit2.http.POST
 
 interface AuthApi {
@@ -34,6 +35,7 @@ interface AuthApi {
 
     @POST("api/v1/auth/logout")
     suspend fun logout(
+        @Header("Authorization") authorization: String,
         @Body request: LogoutRequest
     ): Response<Unit>
 }

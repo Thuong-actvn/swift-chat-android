@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Named
@@ -22,6 +23,10 @@ class TokenRefreshManager @Inject constructor(
     private val sessionManager: SessionManager,
     @param:Named("AuthApi") private val authApiProvider: Provider<AuthApi>
 ) {
+    private companion object {
+        const val LOGOUT_TIMEOUT_MS = 5_000L
+    }
+
     private enum class RefreshResult {
         Success,
         InvalidSession,
@@ -44,26 +49,25 @@ class TokenRefreshManager @Inject constructor(
     }
 
     suspend fun logoutCurrentSession(
-        revokeSession: suspend (refreshToken: String) -> Unit
+        revokeSession: suspend (accessToken: String, refreshToken: String) -> Unit
     ) {
-        val refreshToken = mutex.withLock {
+        mutex.withLock {
+            val accessToken = secureStorage.getAccessToken()
             val refreshToken = secureStorage.getRefreshToken()
 
-            secureStorage.clearAll()
-            sessionManager.logout()
-
-            refreshToken?.takeIf { it.isNotBlank() }
-        }
-
-        // Local logout is authoritative. Remote revocation is best-effort and uses the
-        // refresh token captured after any in-flight refresh completed.
-        if (refreshToken != null) {
             try {
-                revokeSession(refreshToken)
+                if (!accessToken.isNullOrBlank() && !refreshToken.isNullOrBlank()) {
+                    withTimeoutOrNull(LOGOUT_TIMEOUT_MS) {
+                        revokeSession(accessToken, refreshToken)
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // The device is already logged out locally; an offline revoke cannot block it.
+                // Remote logout is best-effort; local logout still happens below.
+            } finally {
+                secureStorage.clearAll()
+                sessionManager.logout()
             }
         }
     }

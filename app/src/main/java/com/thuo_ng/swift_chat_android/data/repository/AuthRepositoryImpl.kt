@@ -75,8 +75,11 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun logout() {
-        tokenRefreshManager.logoutCurrentSession { refreshToken ->
-            authApi.logout(LogoutRequest(refreshToken))
+        tokenRefreshManager.logoutCurrentSession { accessToken, refreshToken ->
+            authApi.logout(
+                authorization = "Bearer $accessToken",
+                request = LogoutRequest(refreshToken)
+            )
         }
     }
 
